@@ -1,5 +1,5 @@
 /* exhaleEnc.cpp - source file for class providing Extended HE-AAC encoding capability
- * written by C. R. Helmrich, last modified in 2023 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2024 - see License.htm for legal notices
  * C API corrected and API compilation extended by J. Regan in 2022, see merge request 8
  *
  * The copyright in this software is being made available under the exhale Copyright License
@@ -828,9 +828,14 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
         const int16_t chanCorrSign = (coreConfig.stereoConfig & 2 ? -1 : 1);
         const uint16_t nSamplesMax = (useMaxBandwidth ? nSamplesInFrame : swbOffsetsL[m_swbTableIdx][__min (m_numSwbLong, maxSfbLong + 1)]);
         const bool reducedStrength = (coreConfig.tnsActive && (m_bitRateMode > 0)) || (m_bitRateMode >= 5);
-        const uint8_t steppFadeLen = (eightShorts0 ? 4 : (reducedStrength ? 32 : 64));
         const uint8_t steppFadeOff = ((m_bitRateMode + 77000 / samplingRate) & 6) << (eightShorts0 ? 2 : 5);
+#if BA_MORE_CBR
+        const uint8_t steppFadeLen = (eightShorts0 ? 4 : (reducedStrength || (m_bitRateMode == 0) ? 32 : 64));
+        const int64_t steppWeightI = __min (64, m_perCorrHCurr[el] - 128) >> ((eightShorts0 && (m_bitRateMode > 0)) || reducedStrength ? 1 : 0); // crosstalk * 128
+#else
+        const uint8_t steppFadeLen = (eightShorts0 ? 4 : (reducedStrength ? 32 : 64));
         const int64_t steppWeightI = __min (64, m_perCorrHCurr[el] - 128) >> (eightShorts0 || reducedStrength ? 1 : 0); // crosstalk * 128
+#endif
         const int64_t steppWeightD = 128 - steppWeightI; // decrement, (1 - crosstalk) * 128
 
         for (uint16_t n = 0, gr = 0; gr < coreConfig.groupingData[0].numWindowGroups; gr++)
@@ -1465,6 +1470,9 @@ unsigned ExhaleEncoder::spectralProcessing ()  // complete ics_info(), calc TNS 
 
           m_perCorrHCurr[el] = (uint8_t) __max (prevPerCorr - allowedDiff, __min (prevPerCorr + allowedDiff, currPerCorr));
         }
+#if BA_MORE_CBR
+        if (m_bitRateMode == 0) m_perCorrHCurr[el] = uint8_t (85 + (2 * s) / 3); // stronger
+#endif
         m_perCorrLCurr[el] = coreConfig.stereoDataCurr[0];
 
         if ((int) s == steAnaStats * -1) coreConfig.stereoConfig = 2;  // 2: S>M, pred_dir=1

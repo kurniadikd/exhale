@@ -1,11 +1,11 @@
 /* basicWavReader.h - header file for class with basic WAVE file reading capability
- * written by C. R. Helmrich, last modified in 2020 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2024 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2024 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #ifndef _BASIC_WAV_READER_H_
@@ -14,7 +14,6 @@
 #include "exhaleAppPch.h"
 
 // constant data sizes & limits
-#define BWR_BUFFERED_READ        1 // faster reader
 #define BWR_READ_FRACT           5 // 2^-READ_FRACT
 #define CHUNK_FORMAT_MAX        40
 #define CHUNK_FORMAT_SIZE       16
@@ -24,7 +23,7 @@
 #define MIN_VALUE_AUDIO24 -8388608 // (1 << 23) *-1
 
 // WAVE data format definitions
-typedef enum WAV_TYPE
+typedef enum WAV_TYPE : int16_t
 {
   WAV_PCM = 0, // linear PCM
   WAV_ADPCM,   // ADPCM
@@ -51,6 +50,7 @@ private:
   unsigned m_waveBitDepth;
   unsigned m_waveBitRate;
   unsigned m_waveChannels;
+  uint16_t m_waveChMpegMap;
   WAV_TYPE m_waveDataType;
   unsigned m_waveFrameRate;
   unsigned m_waveFrameSize;
@@ -76,7 +76,7 @@ private:
 public:
 
   // constructor
-  BasicWavReader () { m_fileHandle = -1;  reset (); }
+  BasicWavReader (const int mpegChCfg) { m_fileHandle = -1; m_waveChMpegMap = (!mpegChCfg ? 0 : 1); reset (); }
   // destructor
   ~BasicWavReader() { if (m_byteBuffer != nullptr) free ((void*) m_byteBuffer); }
   // public functions

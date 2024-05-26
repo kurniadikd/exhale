@@ -1,5 +1,5 @@
 /* exhaleApp.cpp - source file with main() routine for exhale application executable
- * written by C. R. Helmrich, last modified in 2023 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2024 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
@@ -325,7 +325,7 @@ int main (const int argc, char* argv[])
   if (argc <= 0) return argc; // for safety
 
   const bool readStdin = (argc == 3 || argc == 5);
-  BasicWavReader wavReader;
+  BasicWavReader wavReader(1);
   int32_t* inPcmData = nullptr;  // 24-bit WAVE audio input buffer
   int32_t* inPcmRsmp = nullptr;  // temporary buffer for resampler
   uint8_t* outAuData = nullptr;  // access unit (AU) output buffer
