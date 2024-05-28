@@ -41,7 +41,7 @@ static inline unsigned getFrames (const int fileHandle, void* dataBuf, const uns
   return bytesRead / bytesPerFrame;  // num of frames read
 }
 
-static const uint8_t allowedChMask[7] = {0x00, 0x04, 0xC0, 0x00, 0x00, 0x37, 0xCF};
+static const uint8_t allowedChMask[8] = {0x00, 0x04, 0xC0, 0x00, 0x00, 0x37, 0xCF, 0xFF};
 
 // private reader functions
 bool BasicWavReader::readRiffHeader ()
@@ -76,8 +76,9 @@ bool BasicWavReader::readFormatChunk ()
       (b[17] == 0) && (b[18] <= b[14]) && ((b[19] | b[25] | b[26] | b[27] | b[28] | b[29] | b[31] | b[33] | b[34] | b[36]) == 0))
   {
     m_waveDataType = WAV_TYPE (b[24]-1); // extensible WAV
-    if ((b[18] + 8u <= b[14]) || (b[20] != 0 && b[20] != (m_waveChannels < 7 ? allowedChMask[m_waveChannels] : 0) &&
-        b[20] != (1u << __min (8u, m_waveChannels)) - 1u)) return false; // no unusual or nonstandard channel configs
+    if (b[21] == 6) b[20] |= 3 << (m_waveChannels - 2);
+    if ((b[18] + 8u <= b[14]) || (b[20] != 0 && b[20] != allowedChMask[__min (7, m_waveChannels)] &&
+        b[20] != (1u << __min (8, m_waveChannels)) - 1u)) return false;
     b[14] = b[18];
     b[ 1] = 0;
   }
