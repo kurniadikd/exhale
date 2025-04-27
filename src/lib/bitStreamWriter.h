@@ -1,11 +1,11 @@
 /* bitStreamWriter.h - header file for class with basic bit-stream writing capability
- * written by C. R. Helmrich, last modified in 2021 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #ifndef _BIT_STREAM_WRITER_H_
@@ -68,7 +68,7 @@ public:
                               const uint8_t chConfigurationIndex, const uint8_t numElements,
                               const ELEM_TYPE* const elementType, const uint32_t loudnessInfo,
 #if !RESTRICT_TO_AAC
-                              const bool* const tw_mdct /*N/A*/,  const bool* const noiseFilling,
+                              const uint8_t* const twAndTcxInfo,  const bool* const noiseFilling,
 #endif
                               const uint8_t sbrRatioShiftValue,   unsigned char* const audioConfig);
   unsigned createAudioFrame  (CoreCoderData** const elementData,  EntropyCoder* const entropyCoder,
@@ -76,7 +76,7 @@ public:
                               const bool usacIndependencyFlag,    const uint8_t numElements,
                               const uint8_t numSwbShort,          uint8_t* const tempBuffer,
 #if !RESTRICT_TO_AAC
-                              const bool* const tw_mdct /*N/A*/,  const bool* const noiseFilling,
+                              uint8_t* const twAndTcxInfo,        const bool* const noiseFilling,
                               const uint32_t frameCount,          const uint32_t indepPeriod,  uint32_t* rate,
 #endif
                               const uint8_t sbrRatioShiftValue,   int32_t** const sbrInfoAndData,

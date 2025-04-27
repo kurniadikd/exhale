@@ -1,12 +1,12 @@
 /* exhaleEnc.cpp - source file for class providing Extended HE-AAC encoding capability
- * written by C. R. Helmrich, last modified in 2024 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  * C API corrected and API compilation extended by J. Regan in 2022, see merge request 8
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2024 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #include "exhaleLibPch.h"
@@ -278,17 +278,23 @@ static inline void applyTnsCoeffPreProcessing (LinearPredictor& predictor, TnsDa
 
 static inline uint8_t brModeAndFsToMaxSfbLong (const unsigned bitRateMode, const unsigned samplingRate)
 {
+#if !SFB_QUANT_PERCEPT_OPT
+  if (bitRateMode > 5) return (samplingRate > 51200 ? 40 : 39 + ((bitRateMode + 1u) & 14));
+#endif
   // max. for fs of 44 kHz: band 47 (19.3 kHz), 48 kHz: 45 (19.5 kHz), 64 kHz: 39 (22.0 kHz)
   return __max (39, (0x20A000 + (samplingRate >> 1)) / samplingRate) - 9 + bitRateMode - (samplingRate < 46009 ? bitRateMode >> 3 : 0);
 }
 
 static inline uint8_t brModeAndFsToMaxSfbShort(const unsigned bitRateMode, const unsigned samplingRate)
 {
+#if !SFB_QUANT_PERCEPT_OPT
+  if (bitRateMode > 5) return (samplingRate > 51200 ? 11 : 11 + bitRateMode / 3);
+#endif
   // max. for fs of 44 kHz: band 13 (19.3 kHz), 48 kHz: 13 (21.0 kHz), 64 kHz: 11 (23.0 kHz)
   return (samplingRate > 51200 ? 11 : 13) - 2 + (bitRateMode >> 2);
 }
 
-#if !EE_MORE_MSE
+#if SFB_QUANT_PERCEPT_OPT && !EE_MORE_MSE
 static inline void findActualBandwidthShort (uint8_t* const maxSfbShort, const uint16_t* sfbOffsets,
                                              const int32_t* mdctSignals, const int32_t* mdstSignals, const unsigned nSamplesInShort)
 {
@@ -770,7 +776,7 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
   const uint8_t  maxSfbLong      = (useMaxBandwidth ? m_numSwbLong : brModeAndFsToMaxSfbLong (m_bitRateMode, samplingRate));
   const uint16_t scaleSBR        = (m_shiftValSBR > 0 || m_nonMpegExt ? sbrRateOffset[m_bitRateMode] : 0); // -25% rate
   const uint64_t scaleSr         = (samplingRate < 27713 ? (samplingRate < 23004 ? 32 : 34) - __min (3 << m_shiftValSBR, m_bitRateMode)
-                                                         : (samplingRate < 37566 && m_bitRateMode != 3u ? 36 : 37)) - (nChannels >> 1);
+                                   : (m_bitRateMode != 3 && samplingRate < 37566 ? 36 : 37)) - (nChannels >> 1) - 4 + 4 * ((SFB_QUANT_PERCEPT_OPT + 1) / 2);
   const uint64_t scaleBr         = (m_bitRateMode == 0 || m_frameCount <= 1 ? __min (32, 17u + (((samplingRate + (1 << 11)) >> 12) << 1) - (nChannels >> 1))
                                    : scaleSr - eightTimesSqrt256Minus[256 - m_bitRateMode] - __min (3, (m_bitRateMode - 1) >> 1)) + scaleSBR;
   uint32_t* sfbStepSizes = (uint32_t*) m_tempIntBuf;
@@ -780,7 +786,7 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
 
   // psychoacoustic processing of SFB RMS values yielding masking thresholds in m_tempIntBuf
   errorValue |= m_bitAllocator.initSfbStepSizes (m_scaleFacData, m_numSwbShort, m_specAnaCurr, m_tempAnaCurr,
-                                                 nChannels, samplingRate, sfbStepSizes, lfeChannelIndex);
+                                                 nChannels, samplingRate, sfbStepSizes, lfeChannelIndex, 5 - 5 * ((SFB_QUANT_PERCEPT_OPT + 1) / 2));
 
   // get means of spectral and temporal flatness for every channel
   m_bitAllocator.getChAverageSpecFlat (meanSpecFlat, nChannels);
@@ -828,7 +834,7 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
         const int16_t chanCorrSign = (coreConfig.stereoConfig & 2 ? -1 : 1);
         const uint16_t nSamplesMax = (useMaxBandwidth ? nSamplesInFrame : swbOffsetsL[m_swbTableIdx][__min (m_numSwbLong, maxSfbLong + 1)]);
         const bool reducedStrength = (coreConfig.tnsActive && (m_bitRateMode > 0)) || (m_bitRateMode >= 5);
-        const uint8_t steppFadeOff = ((m_bitRateMode + 77000 / samplingRate) & 6) << (eightShorts0 ? 2 : 5);
+        const uint8_t steppFadeOff = CLIP_UCHAR (((m_bitRateMode + 77000 / samplingRate) & 14) << (eightShorts0 ? 2 : 5));
 #if BA_MORE_CBR
         const uint8_t steppFadeLen = (eightShorts0 ? 4 : (reducedStrength || (m_bitRateMode == 0) ? 32 : 64));
         const int64_t steppWeightI = __min (64, m_perCorrHCurr[el] - 128) >> ((eightShorts0 && (m_bitRateMode > 0)) || reducedStrength ? 1 : 0); // crosstalk * 128
@@ -1016,7 +1022,7 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
                                                                       : brModeAndFsToMaxSfbShort (m_bitRateMode, samplingRate)) : maxSfbLong);
           const bool keepMaxSfbCurr = ((samplingRate < 37566) || (samplingRate >= 46009 && samplingRate < 55426 && eightShorts));
           const uint8_t numSwbFrame = __min ((numSwbCh * ((maxSfbCh == maxSfbCurr) || (m_bitRateMode <= 2) || (m_shiftValSBR > 0) ? 4u : 3u)) >> 2,
-                                             maxSfbCurr + (m_bitRateMode < 2 || m_bitRateMode > 3 || keepMaxSfbCurr ? 0u : 1u));
+                                             maxSfbCurr + (m_bitRateMode < 2 || (m_bitRateMode >> 2) == 1 || keepMaxSfbCurr ? 0u : 1u));
 
           if ((m_bitRateMode == 0) && (m_numElements == 1) && (samplingRate < 27713) && eightShorts)
           {
@@ -1101,7 +1107,7 @@ unsigned ExhaleEncoder::quantizationCoding ()  // apply MDCT quantization and en
   const unsigned nSamplesInFrame  = toFrameLength (m_frameLength);
   const unsigned samplingRate     = toSamplingRate (m_frequencyIdx);
   const unsigned nSamplesTempAna  = (nSamplesInFrame * 25) >> 4; // pre-delay for look-ahead
-#if !EE_MORE_MSE
+#if SFB_QUANT_PERCEPT_OPT && !EE_MORE_MSE
   const bool     useMaxBandwidth  = (samplingRate < 37566 || m_shiftValSBR > 0);
 #endif
   const unsigned* const coeffMagn = m_sfbQuantizer.getCoeffMagnPtr ();
@@ -1157,7 +1163,7 @@ unsigned ExhaleEncoder::quantizationCoding ()  // apply MDCT quantization and en
         uint32_t estimBitCount = 0;
         unsigned lastSfb = 0, lastSOff = 0;
 
-        errorValue |= entrCoder.initWindowCoding (m_indepFlag && (gr == 0), shortWinCurr);
+        errorValue |= entrCoder.initWindowCoding (m_indepFlag && gr == 0, shortWinCurr ? 3 : 0);
         s = 0;
 
         for (uint16_t b = 0; b < grpData.sfbsPerGroup; b++)
@@ -1206,13 +1212,13 @@ unsigned ExhaleEncoder::quantizationCoding ()  // apply MDCT quantization and en
           lastSOff = s;
           for (uint16_t c = 0; c < swbSize; c += 2)
           {
-            arithTuples[s++] = __min (0xF, swbMagn[c] + swbMagn[c + 1] + 1); // 23003-3, 7.4
+            arithTuples[s++] = __min (0xF, swbMagn[c] + (int) swbMagn[c + 1] + 1);
           }
         } // for b
 
         if (grpData.sfbsPerGroup > 0) // rate control part 2 to reach constrained VBR (CVBR)
         {
-#if EE_MORE_MSE
+#if EE_MORE_MSE || !SFB_QUANT_PERCEPT_OPT
           const unsigned targetBitCount25 = INT32_MAX;
 #else
           const uint8_t maxSfbLong  = (useMaxBandwidth ? 54 - (samplingRate >> 13) : brModeAndFsToMaxSfbLong (m_bitRateMode, samplingRate));
@@ -1252,7 +1258,7 @@ unsigned ExhaleEncoder::quantizationCoding ()  // apply MDCT quantization and en
             }
           }
 #endif
-#if EE_MORE_MSE
+#if EE_MORE_MSE || !SFB_QUANT_PERCEPT_OPT
           b = lastSfb;
 #else
           // coarse-quantize near-Nyquist SFB with SBR @ 48-64 kHz
@@ -1280,7 +1286,7 @@ unsigned ExhaleEncoder::quantizationCoding ()  // apply MDCT quantization and en
               grpRms[b] = (maxVal << 16) + maxVal; // bit estimate
               maxVal = quantizeSfbWithMinSnr (coeffMagn, grpOff, b, grpLength, m_mdctQuantMag[ci], arithTuples, maxVal > 0);
 
-              grpScaleFacs[b] = __min (SCHAR_MAX, m_sfbQuantizer.getScaleFacOffset ((double) maxVal));
+              grpScaleFacs[b] = __min (SF_INDEX_MAX, m_sfbQuantizer.getScaleFacOffset ((double) maxVal));
 
               // correct SFB statistics with estimate of bit count
               grpRms[b] += 3 + entrCoder.indexGetBitCount ((int) grpScaleFacs[b] - grpScaleFacs[b - 1]);
@@ -1307,7 +1313,7 @@ unsigned ExhaleEncoder::quantizationCoding ()  // apply MDCT quantization and en
                 grpRms[b] = (maxVal << 16) + maxVal; // bit estim.
                 maxVal = quantizeSfbWithMinSnr (coeffMagn, grpOff, b, grpLength, m_mdctQuantMag[ci], arithTuples, maxVal > 0);
 
-                grpScaleFacs[b] = __min (SCHAR_MAX, m_sfbQuantizer.getScaleFacOffset ((double) maxVal));
+                grpScaleFacs[b] = __min (SF_INDEX_MAX, m_sfbQuantizer.getScaleFacOffset ((double) maxVal));
 
                 // correct SFB statistics with estimated bit count
                 grpRms[b] += 3 + entrCoder.indexGetBitCount ((int) grpScaleFacs[b] - grpScaleFacs[b - 1]);
@@ -1346,11 +1352,15 @@ unsigned ExhaleEncoder::quantizationCoding ()  // apply MDCT quantization and en
 
       // restore entropy coder memory for use by bit-stream writer
       memcpy (arithTuples, m_tempIntBuf, (nSamplesInFrame >> 1) * sizeof (char));
-      entrCoder.setIsShortWindow (shortWinPrev);
+      entrCoder.setShortWinShift (shortWinPrev ? 3 : 0);
 #if !RESTRICT_TO_AAC
       s = 22050 + 7350 * m_bitRateMode; // compute channel-wise noise_level and noise_offset
+#if SFB_QUANT_PERCEPT_OPT
       sfIdxPred = ((m_bitRateMode == 0) && (m_priLength) && (m_shiftValSBR) && ((m_tempAnaCurr[ci] >> 24) || (m_tempAnaNext[ci] >> 24)) && (meanSpecFlat[ci] +
                     __min ((m_tempAnaCurr[ci] >> 16) & UCHAR_MAX, (m_tempAnaNext[ci] >> 16) & UCHAR_MAX) >= 192) ? UCHAR_MAX : meanSpecFlat[ci]);
+#else
+      sfIdxPred = UCHAR_MAX;
+#endif
       coreConfig.specFillData[ch] = (!m_noiseFilling[el] ? 0 : m_specGapFiller.getSpecGapFillParams (m_sfbQuantizer, m_mdctQuantMag[ci], m_numSwbShort,
                                                                                                      grpData, nSamplesInFrame, samplingRate, s,
                                                                                                      shortWinCurr ? 0 : sfIdxPred));
@@ -1394,7 +1404,7 @@ unsigned ExhaleEncoder::quantizationCoding ()  // apply MDCT quantization and en
   return (errorValue > 0 ? 0 : m_outStream.createAudioFrame (m_elementData, m_entropyCoder, m_mdctSignals, m_mdctQuantMag, m_indepFlag,
                                                              m_numElements, m_numSwbShort, (uint8_t* const) m_tempIntBuf,
 #if !RESTRICT_TO_AAC
-                                                             m_timeWarping, m_noiseFilling, m_frameCount - 1u, m_indepPeriod, &m_rateFactor,
+                                                             m_timeWarpTCX, m_noiseFilling, m_frameCount - 1u, m_indepPeriod, &m_rateFactor,
 #endif
                                                              m_shiftValSBR, m_coreSignals, m_outAuData, nSamplesInFrame)); // returns AU size
 }
@@ -1499,15 +1509,16 @@ unsigned ExhaleEncoder::spectralProcessing ()  // complete ics_info(), calc TNS 
           grpSO[icsCurr.maxSfb] = (uint16_t) nSamplesInFrame;
           grpData.sfbsPerGroup = m_numSwbLong = icsCurr.maxSfb;  // changed to max_sfb later
 
-          if (samplingRate > 32000) // set max_sfb based on VBR mode and bandwidth detection
+          if (samplingRate >= 37566) // set max_sfb based on VBR mode and detected bandwidth
           {
             if (icsCurr.maxSfb > 49) // may still be 51 for 32 kHz
             {
+              grpSO[49] = grpSO[m_numSwbLong];
               grpData.sfbsPerGroup = m_numSwbLong = icsCurr.maxSfb = 49; // fix 44.1, 48 kHz
             }
             icsCurr.maxSfb = __min (icsCurr.maxSfb, brModeAndFsToMaxSfbLong (m_bitRateMode, samplingRate));
           }
-#if !EE_MORE_MSE
+#if SFB_QUANT_PERCEPT_OPT && !EE_MORE_MSE
           while (grpSO[icsCurr.maxSfb] > __max (m_bandwidCurr[ci], m_bandwidPrev[ci]) + (icsCurr.maxSfb >> 1)) icsCurr.maxSfb--; // detect BW
 #endif
         }
@@ -1520,7 +1531,7 @@ unsigned ExhaleEncoder::spectralProcessing ()  // complete ics_info(), calc TNS 
           grpSO[icsCurr.maxSfb] = (uint16_t) nSamplesInShort;
           grpData.sfbsPerGroup = m_numSwbShort = icsCurr.maxSfb; // changed to max_sfb later
 
-          if (samplingRate > 32000) // set max_sfb based on VBR mode and zero-ness detection
+          if (samplingRate >= 37566) // set max_sfb based on VBR mode and detected zero-ness
           {
             icsCurr.maxSfb = __min (icsCurr.maxSfb, brModeAndFsToMaxSfbShort (m_bitRateMode, samplingRate));
           }
@@ -1540,7 +1551,7 @@ unsigned ExhaleEncoder::spectralProcessing ()  // complete ics_info(), calc TNS 
             }
           }
           memcpy (grpData.windowGroupLength, windowGroupingTable[icsCurr.windowGrouping], NUM_WINDOW_GROUPS * sizeof (uint8_t));
-#if !EE_MORE_MSE
+#if SFB_QUANT_PERCEPT_OPT && !EE_MORE_MSE
           findActualBandwidthShort (&icsCurr.maxSfb, grpSO, m_mdctSignals[ci], nChannels < 2 ? nullptr : m_mdstSignals[ci], nSamplesInShort);
 #endif
           errorValue |= eightShortGrouping (grpData, grpSO, m_mdctSignals[ci], nChannels < 2 ? nullptr : m_mdstSignals[ci]);
@@ -1949,7 +1960,7 @@ ExhaleEncoder::ExhaleEncoder (int32_t* const inputPcmData,           unsigned ch
     m_perCorrLCurr[el] = 0;
 #if !RESTRICT_TO_AAC
     m_noiseFilling[el] = (useNoiseFilling && (et < ID_USAC_LFE));
-    m_timeWarping[el]  = (false /* N/A */ && (et < ID_USAC_LFE));
+    m_timeWarpTCX[el]  = uint8_t ((false) && (et < ID_USAC_LFE));
 #endif
   }
   // initialize all signal buffers
@@ -2156,7 +2167,7 @@ unsigned ExhaleEncoder::initEncoder (unsigned char* const audioConfigBuffer, uin
       errorValue = m_outStream.createAudioConfig (m_frequencyIdx, m_frameLength != CCFL_1024, chConf, m_numElements,
                                                   elementTypeConfig[chConf], audioConfigBytes ? *audioConfigBytes : 0,
 #if !RESTRICT_TO_AAC
-                                                  m_timeWarping, m_noiseFilling,
+                                                  m_timeWarpTCX, m_noiseFilling,
 #endif
                                                   m_shiftValSBR, audioConfigBuffer);
       if (audioConfigBytes) *audioConfigBytes = errorValue; // size of UsacConfig() in bytes
@@ -2239,7 +2250,7 @@ unsigned ExhaleEncoder::initEncoder (unsigned char* const audioConfigBuffer, uin
     errorValue = m_outStream.createAudioConfig (m_frequencyIdx, m_frameLength != CCFL_1024, chConf, m_numElements,
                                                 elementTypeConfig[chConf], loudnessInfo,
 #if !RESTRICT_TO_AAC
-                                                m_timeWarping, m_noiseFilling,
+                                                m_timeWarpTCX, m_noiseFilling,
 #endif
                                                 m_shiftValSBR, audioConfigBuffer);
     if (audioConfigBytes) *audioConfigBytes = errorValue; // length of UsacConfig() in bytes

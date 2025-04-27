@@ -1,11 +1,11 @@
 /* exhaleApp.cpp - source file with main() routine for exhale application executable
- * written by C. R. Helmrich, last modified in 2024 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2024 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #include "exhaleAppPch.h"
@@ -483,7 +483,7 @@ int main (const int argc, char* argv[])
   // check arg. list, print usage if needed
   if ((argc < 3) || (argc > 6) || (argc > 1 && argv[1][1] != 0))
   {
-    fprintf_s (stdout, " Copyright 2018-2024 C.R.Helmrich, project ecodis. See License.htm for details.\n\n");
+    fprintf_s (stdout, " Copyright 2018-2025 C.R.Helmrich, project ecodis. See License.htm for details.\n\n");
 
     fprintf_s (stdout, " This software is made available under the exhale Copyright License and comes\n");
     fprintf_s (stdout, " with ABSOLUTELY NO WARRANTY. This software may be subject to other third-party\n");
@@ -872,7 +872,7 @@ int main (const int argc, char* argv[])
 #ifdef NO_PREROLL_DATA
     outAuData = (uint8_t*) malloc ((6144 >> 3) * numChannels); // max frame AU size
 #else
-    outAuData = (uint8_t*) malloc ((9984 >> 3) * numChannels); // max frame AU size
+    outAuData = (uint8_t*) malloc ((6144 >> 2) * numChannels); // max frame AU size
 #endif
     if ((inPcmData == nullptr) || (outAuData == nullptr))
     {

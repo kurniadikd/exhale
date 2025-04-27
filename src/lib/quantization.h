@@ -1,11 +1,11 @@
 /* quantization.h - header file for class with nonuniform quantization functionality
- * written by C. R. Helmrich, last modified in 2023 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2024 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #ifndef _QUANTIZATION_H_
@@ -16,12 +16,13 @@
 
 // constants, experimental macros
 #define FOUR_LOG102   13.28771238 // 4 / log10 (2)
+#define SF_INDEX_MAX    SCHAR_MAX
 #define SF_QUANT_OFFSET 0.4783662 // for scale fac
 #define SF_THRESH_NEG  0.92044821 // round -1.5 dB
 #define SF_THRESH_POS  1.09460356 // round +1.5 dB
 #define SFB_QUANT_OFFSET 0.496094 // 13 - 29^(3/4)
 #define SFB_QUANT_PERCEPT_OPT   1 // psych. quant.
-#define SFB_QUANT_SSE           0
+#define QUANT_MAX  85 + (170 >> SFB_QUANT_PERCEPT_OPT)
 
 // class for BL USAC quantization
 class SfbQuantizer
@@ -38,7 +39,6 @@ private:
   double*   m_lut2ExpX4; // for 2^(X/4)
   double*   m_lutSfNorm; // 1 / 2^(X/4)
   double*   m_lutXExp43; // for X^(4/3)
-  uint8_t   m_maxSfIndex; // 1,..., 127
 #if EC_TRELLIS_OPT_CODING
   uint8_t   m_maxSize8M1; // (size/8)-1
   uint8_t   m_numCStates; // states/SFB
@@ -73,11 +73,11 @@ public:
   unsigned* getCoeffMagnPtr ()                      const { return m_coeffMagn; }
   double*   getSfNormTabPtr ()                      const { return m_lutSfNorm; }
   uint8_t getScaleFacOffset (const double absValue) const { return uint8_t (SF_QUANT_OFFSET + FOUR_LOG102 * log10 (__max (1.0, absValue))); }
-  unsigned  initQuantMemory (const unsigned maxTransfLength,
 #if EC_TRELLIS_OPT_CODING
-                             const uint8_t numSwb, const uint8_t bitRateMode, const unsigned samplingRate,
+  unsigned  initQuantMemory (const unsigned maxLength, const uint8_t numSwb, const uint8_t bitRateMode, const unsigned samplingRate);
+#else
+  unsigned  initQuantMemory (const unsigned maxLength);
 #endif
-                             const uint8_t maxScaleFacIndex = SCHAR_MAX);
   uint8_t   quantizeSpecSfb (EntropyCoder& entropyCoder, const int32_t* const inputCoeffs, const uint8_t grpLength,
                              const uint16_t* const grpOffsets, uint32_t* const grpStats,  // quant./coding statistics
                              const unsigned sfb, const uint8_t sfIndex, const uint8_t sfIndexPred = UCHAR_MAX,

@@ -1,11 +1,11 @@
 /* exhaleEnc.h - header file for class providing Extended HE-AAC encoding capability
- * written by C. R. Helmrich, last modified in 2023 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2024 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #ifndef _EXHALE_ENC_H_
@@ -115,7 +115,7 @@ private:
   int32_t*        m_tempIntBuf;  // temporary int32 buffer
   int32_t*        m_timeSignals[USAC_MAX_NUM_CHANNELS];
 #if !RESTRICT_TO_AAC
-  bool            m_timeWarping[USAC_MAX_NUM_ELEMENTS];
+  uint8_t         m_timeWarpTCX[USAC_MAX_NUM_ELEMENTS]; // for TW, TCX
 #endif
   int32_t*        m_timeWindowL[2];  // long window halves
   int32_t*        m_timeWindowS[2]; // short window halves

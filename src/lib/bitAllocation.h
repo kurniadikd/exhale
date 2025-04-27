@@ -1,11 +1,11 @@
 /* bitAllocation.h - header file for class needed for psychoacoustic bit-allocation
- * written by C. R. Helmrich, last modified in 2021 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #ifndef _BIT_ALLOCATION_H_
@@ -49,7 +49,7 @@ public:
                              const uint32_t specAnaStats[USAC_MAX_NUM_CHANNELS],
                              const uint32_t tempAnaStats[USAC_MAX_NUM_CHANNELS],
                              const unsigned nChannels, const unsigned samplingRate, uint32_t* const sfbStepSizes,
-                             const unsigned lfeChannelIndex = USAC_MAX_NUM_CHANNELS, const bool tnsDisabled = false);
+                             const unsigned lfeChannelIndex, const unsigned ad = 0u, const bool tnsDisabled = false);
   unsigned imprSfbStepSizes (const SfbGroupData* const groupData[USAC_MAX_NUM_CHANNELS], const uint8_t numSwbShort,
                              const int32_t* const mdctSpec[USAC_MAX_NUM_CHANNELS], const unsigned nSamplesInFrame,
                              const unsigned nChannels, const unsigned samplingRate, uint32_t* const sfbStepSizes,

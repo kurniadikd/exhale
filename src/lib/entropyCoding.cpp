@@ -1,11 +1,11 @@
 /* entropyCoding.cpp - source file for class with lossless entropy coding capability
- * written by C. R. Helmrich, last modified in 2022 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #include "exhaleLibPch.h"
@@ -400,25 +400,29 @@ unsigned EntropyCoder::arithMapContext (const bool arithResetFlag)  // c = arith
   {
     memset (m_qcPrev, 0, m_maxTupleLength * sizeof (uint8_t));
   }
-  else if (m_shortTrafoCurr == m_shortTrafoPrev)
+  else if (m_shiftTrafoCurr == m_shiftTrafoPrev)
   {
     memcpy (m_qcPrev, m_qcCurr, m_acSize * sizeof (uint8_t));
   }
-  else if (m_shortTrafoCurr && !m_shortTrafoPrev)
+  else if (m_shiftTrafoCurr > m_shiftTrafoPrev)
   {
+    const int shiftDiff = (int) m_shiftTrafoCurr - m_shiftTrafoPrev;
+
     for (int i = m_acSize - 1; i >= 0; i--)
     {
-      m_qcPrev[i] = m_qcCurr[i << 3];
+      m_qcPrev[i] = m_qcCurr[i << shiftDiff];
     }
   }
-  else // (!m_shortTrafoCurr && m_shortTrafoPrev)
+  else // (m_shiftTrafoCurr < m_shiftTrafoPrev)
   {
+    const int shiftDiff = (int) m_shiftTrafoPrev - m_shiftTrafoCurr;
+
     for (int i = m_acSize - 1; i >= 0; i--)
     {
-      m_qcPrev[i] = m_qcCurr[i >> 3];
+      m_qcPrev[i] = m_qcCurr[i >> shiftDiff];
     }
   }
-  m_qcPrev[m_acSize] = 0; // for encoder speed-up
+  m_qcPrev[m_acSize] = 0; // for encoding speed
 
   return (unsigned) m_qcPrev[0] << 12; // initial context ctx with top-left previous neighbor
 }
@@ -448,8 +452,8 @@ EntropyCoder::EntropyCoder ()
   m_acSize = 0;
   m_csCurr = 0;
   m_maxTupleLength = 0;
-  m_shortTrafoCurr = false;
-  m_shortTrafoPrev = false;
+  m_shiftTrafoCurr = 0;
+  m_shiftTrafoPrev = 0;
 }
 
 // destructor
@@ -656,14 +660,14 @@ unsigned EntropyCoder::arithGetResetBit (const uint8_t* const magn, const uint16
 
   for (uint16_t s = sigOffset >> 1; s < sigEnd; s++)
   {
-    const int qcCurrS = __min (0xF, (int)*a + (int)*b);
+    const int qcCurrS = __min (0xF, *a + (int) *b + 1);
     const int qcDiffS = qcCurrS - m_qcPrev[s];
 
     qcDiff += qcDiffS * qcDiffS;
     a += 2; b += 2;
   }
 
-  return (qcDiff * 2u > sigLength * 7u ? 1 : 0); // use reset if difference exceeds threshold
+  return (qcDiff >= sigLength * 4u ? 1 : 0); // reset encoder if difference exceeds threshold
 }
 
 unsigned EntropyCoder::indexGetBitCount (const int scaleFactorDelta) const
@@ -700,16 +704,16 @@ unsigned EntropyCoder::initCodingMemory (const unsigned maxTransfLength)
   return 0; // no error
 }
 
-unsigned EntropyCoder::initWindowCoding (const bool forceArithReset, const bool shortWin /*= false*/)
+unsigned EntropyCoder::initWindowCoding (const bool forceArithReset, const uint8_t winLenShift /*= 0*/)
 {
   // arith_first_symbol() in Scl. B.25.3
   m_acBits = 0;
   m_acHigh = USHRT_MAX;
   m_acLow  = 0;
-  m_acSize = (shortWin ? m_maxTupleLength >> 3 : m_maxTupleLength);
+  m_acSize = m_maxTupleLength >> __min (3u, winLenShift);
 
-  m_shortTrafoPrev = m_shortTrafoCurr;
-  m_shortTrafoCurr = shortWin;
+  m_shiftTrafoPrev = m_shiftTrafoCurr;
+  m_shiftTrafoCurr = winLenShift;
 
   m_csCurr = arithMapContext (forceArithReset); // m_qcPrev
   memset (m_qcCurr, 1, m_acSize * sizeof (uint8_t)); // reset m_qcCurr, see also arith_finish

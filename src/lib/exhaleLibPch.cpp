@@ -1,21 +1,22 @@
 /* exhaleLibPch.cpp - pre-compiled source file for classes of exhaleLib coding library
- * written by C. R. Helmrich, last modified in 2021 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #include "exhaleLibPch.h"
 
 // public bit-stream functions
-void OutputStream::reset () // clear writer states and byte buffer
+void OutputStream::reset (uint16_t c)
 {
   heldBitChunk = 0;
   heldBitCount = 0;
   stream.clear ();
+  if (c) stream.reserve (c);
 }
 
 void OutputStream::write (const uint32_t bitChunk, const uint8_t bitCount)

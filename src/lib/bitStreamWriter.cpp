@@ -1,11 +1,11 @@
 /* bitStreamWriter.cpp - source file for class with basic bit-stream writing capability
- * written by C. R. Helmrich, last modified in 2023 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2024 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #include "exhaleLibPch.h"
@@ -150,9 +150,15 @@ static uint8_t getOptMsMaskModeValue (const uint8_t* const msUsed, const unsigne
                                       const uint8_t    msMaskMode, const unsigned maxSfbSte)
 {
   const unsigned sfbStep = (msMaskMode < 3 ? 1 : SFB_PER_PRED_BAND);
-  unsigned b, g;
+  unsigned b, g = 0;
 
-  if ((msUsed == nullptr) || ((msMaskMode & 1) == 0)) return msMaskMode;
+  if ((msUsed == nullptr) || ((msMaskMode & 1) == 0) || (numWinGroups == 0)) return msMaskMode;
+
+  for (b = (numWinGroups - 1u) << 6; b < maxSfbSte; b += sfbStep) // !short
+  {
+    if (msUsed[b] == 0) g++;
+  }
+  if (g * sfbStep >= maxSfbSte) return 0; // no M/S in any of bands
 
   for (g = 0; g < numWinGroups; g++)
   {
@@ -162,10 +168,108 @@ static uint8_t getOptMsMaskModeValue (const uint8_t* const msUsed, const unsigne
     {
       if (gMsUsed[b] == 0) return msMaskMode;  // M/S in some bands
     }
-  } // for g
+  }
 
   return (msMaskMode + 1); // upgrade mask mode to M/S in all bands
 }
+
+#if !RESTRICT_TO_AAC
+static unsigned writeLPCDataForOneSet (const uint8_t* const data, const unsigned set, OutputStream& auBitStream)
+{
+  unsigned bitCount = (set < 4 ? 5 : 4), b = 12 *__min (4, set); // lpc_set
+
+  if (set < 4) auBitStream.write (data[b], 1); // get_mode_lpc bit
+  if (data[b++] == 0) // lpc_first_approx._index
+  {
+    auBitStream.write (data[b], 8);
+    bitCount += 8;
+  }
+  b++;
+  auBitStream.write (data[b++], 2); // code_book_indices() qn_base
+  auBitStream.write (data[b++], 2); // allowed: qn[k] = 2, 3, or 4
+
+  for (int k = 0; k < 2; k++) // code_book_index
+  {
+    const unsigned n = data[b - 2 + k] + 2;
+
+    auBitStream.write (data[b + 2 * k], 8); // 1st 8 bits of index
+    auBitStream.write (data[b + 2 * k + 1], 4 * n - 8);
+    bitCount += 4 * n;
+  }
+
+  return bitCount;
+}
+
+static unsigned writeLPDChannelStream (const CoreCoderData& elData, EntropyCoder& entrCoder, const unsigned ch,
+                                       const int32_t* const mdctSignal, const uint8_t* const mdctQuantMag,
+                                       const uint8_t bpfAndModes, const bool noiseFilling, uint8_t* ipfAuState,
+                                       const unsigned frameLen, OutputStream& auBitStream, const bool indepFlag)
+{
+  const SfbGroupData& grp = elData.groupingData[ch];
+  const uint8_t* const lp = grp.scaleFactors + 2;
+  const int numTcxWindows = __max (1, grp.numWindowGroups); // 1,2
+//const int numPrvWindows = 2 - ((bpfAndModes >> (4 + ch)) & 1);
+  const unsigned lg = frameLen / numTcxWindows;
+  unsigned bitCount = 11, b, i;
+
+  auBitStream.write (0, 3); // acelp_core_mode (not used with TCX)
+  auBitStream.write (26 -__min (2, numTcxWindows), 5); // lpd_mode
+  // bpf_control_info and core_mode_last at given channel index ch
+  auBitStream.write ((bpfAndModes >> (2 * ch)) & 3, 2);
+  auBitStream.write (0, 1); // fac_data_present = 0, no fac_data()
+
+  for (int w = 0; w < numTcxWindows; w++) // per-window tcx_coding
+  {
+    const uint8_t* const winMag = mdctQuantMag + w * lg;
+    const int32_t* const winSig = mdctSignal   + w * lg;
+    const bool wasShortWinFrame = entrCoder.getIsShortWindow ();
+
+    if (noiseFilling) // noise_factor; for USAC, if is always true
+    {
+      auBitStream.write ((elData.specFillData[ch] >> (3 * w)) & 7, 3);
+      bitCount += 3;
+    }
+    auBitStream.write (grp.scaleFactors[w], 7); // TCX global_gain
+    bitCount += (indepFlag || w ? 7 : 8); // incl arith_reset_flag
+
+    entrCoder.initWindowCoding (indepFlag && !w, uint8_t (numTcxWindows - 1)); // first_tcx_flag
+
+    if (!indepFlag && !w) // optimize arith_reset_flag
+    {
+      if ((b = wasShortWinFrame && numTcxWindows > 1 ? 1 : entrCoder.arithGetResetBit (winMag, 0, lg)) != 0)
+      {
+        entrCoder.arithResetMemory ();
+        entrCoder.arithSetCodState (USHRT_MAX << 16);
+        entrCoder.arithSetCtxState (0);
+      }
+      auBitStream.write (b, 1); // write optimized bit
+    }
+    bitCount += entrCoder.arithCodeSigMagn (winMag, 0, lg, true, &auBitStream);
+
+    for (i = 0; i < lg; i++)
+    {
+      if (winMag[i] != 0)
+      {
+        auBitStream.write (winSig[i] < 0 ? 0 : 1, 1); // -1 = 0, +1 = 1
+        bitCount++;
+      }
+    }
+  } // for w
+
+  bitCount += writeLPCDataForOneSet (lp, 4, auBitStream); // lpc_data()
+
+  if (!((bpfAndModes >> (2 * ch)) & 1)) // first_lpd_flag
+    bitCount += writeLPCDataForOneSet (lp, 0, auBitStream);
+
+  if (numTcxWindows > 1) // mod[0] != 3, or lpd_mode < 25
+    bitCount += writeLPCDataForOneSet (lp, 2, auBitStream);
+
+# ifndef NO_PREROLL_DATA
+  if (ipfAuState) memset (ipfAuState, 0, 4); // not an FD
+# endif
+  return bitCount;
+}
+#endif
 
 // private helper functions
 void BitStreamWriter::writeByteAlignment () // write '0' bits until stream is byte-aligned
@@ -507,7 +611,7 @@ unsigned BitStreamWriter::writeFDChannelStream (const CoreCoderData& elData, Ent
 
   if (maxSfb == 0) // zeroed spectrum
   {
-    entrCoder.initWindowCoding (!eightShorts /*reset*/, eightShorts);
+    entrCoder.initWindowCoding (!eightShorts /*reset*/, eightShorts ? 3 : 0);
 
     if (!indepFlag) m_auBitStream.write (1, 1); // force reset
 #ifndef NO_PREROLL_DATA
@@ -548,9 +652,9 @@ unsigned BitStreamWriter::writeFDChannelStream (const CoreCoderData& elData, Ent
           i += swbSize[b];
         }
       }
-      entrCoder.initWindowCoding (indepFlag && (w == 0), eightShorts);
+      entrCoder.initWindowCoding (indepFlag && !w, eightShorts ? 3 : 0);
 
-      if (!indepFlag && (w == 0)) // optimize arith_reset_flag
+      if (!indepFlag && !w) // optimize arith_reset_flag
       {
         if ((b = entrCoder.arithGetResetBit (winMag, 0, lg)) != 0)
         {
@@ -558,10 +662,10 @@ unsigned BitStreamWriter::writeFDChannelStream (const CoreCoderData& elData, Ent
           entrCoder.arithSetCodState (USHRT_MAX << 16);
           entrCoder.arithSetCtxState (0);
         }
-        m_auBitStream.write (b, 1); // write adapted reset bit
+        m_auBitStream.write (b, 1); // write adapted bit
       }
 #ifndef NO_PREROLL_DATA
-      if (ipfAuState && (w == 0))
+      if (ipfAuState && !w)
       {
         b = (unsigned) m_auBitStream.stream.size ();
 
@@ -588,7 +692,7 @@ unsigned BitStreamWriter::writeFDChannelStream (const CoreCoderData& elData, Ent
             }
           }
           ipfAuState[4] = (uint8_t) b;
-          ipfAuState[5] = winMag[b] << 1;
+          ipfAuState[5] = __min (254, winMag[b] << 1);
           if (winSig[b] > 0) ipfAuState[5] |= 1; // store sign of single peak
         }
       }
@@ -811,7 +915,7 @@ unsigned BitStreamWriter::createAudioConfig (const char samplingFrequencyIndex, 
                                              const uint8_t chConfigurationIndex, const uint8_t numElements,
                                              const ELEM_TYPE* const elementType, const uint32_t loudnessInfo,
 #if !RESTRICT_TO_AAC
-                                             const bool* const tw_mdct /*N/A*/,  const bool* const noiseFilling,
+                                             const uint8_t* const twAndTcxInfo,  const bool* const noiseFilling,
 #endif
                                              const uint8_t sbrRatioShiftValue,   unsigned char* const audioConfig)
 {
@@ -824,7 +928,7 @@ unsigned BitStreamWriter::createAudioConfig (const char samplingFrequencyIndex, 
 
   if ((elementType == nullptr) || (audioConfig == nullptr) || (chConfigurationIndex >= USAC_MAX_NUM_ELCONFIGS) ||
 #if !RESTRICT_TO_AAC
-      (noiseFilling == nullptr) || (tw_mdct == nullptr) ||
+      (noiseFilling == nullptr) || (twAndTcxInfo == nullptr) ||
 #endif
       (numElements == 0) || (numElements > USAC_MAX_NUM_ELEMENTS) || (samplingFrequencyIndex < 0) || (samplingFrequencyIndex >= 0x1F))
   {
@@ -870,7 +974,7 @@ unsigned BitStreamWriter::createAudioConfig (const char samplingFrequencyIndex, 
 #if RESTRICT_TO_AAC
       m_auBitStream.write (0, 2);  // time warping and noise filling not allowed
 #else
-      m_auBitStream.write ((tw_mdct[el] ? 2 : 0) | (noiseFilling[el] ? 1 : 0), 2);
+      m_auBitStream.write ((twAndTcxInfo[el] & 2) | (noiseFilling[el] ? 1 : 0), 2);
 #endif
       bitCount += 2;
       if (sbrRatioShiftValue > 0)  // sbrRatioIndex > 0: SbrConfig
@@ -943,7 +1047,7 @@ unsigned BitStreamWriter::createAudioFrame (CoreCoderData** const elementData,  
                                             const bool usacIndependencyFlag,    const uint8_t numElements,
                                             const uint8_t numSwbShort,          uint8_t* const tempBuffer,
 #if !RESTRICT_TO_AAC
-                                            const bool* const tw_mdct /*N/A*/,  const bool* const noiseFilling,
+                                            uint8_t* const twAndTcxInfo,        const bool* const noiseFilling,
                                             const uint32_t frameCount,          const uint32_t indepPeriod,  uint32_t* rate,
 #endif
                                             const uint8_t sbrRatioShiftValue,   int32_t** const sbrInfoAndData,
@@ -960,7 +1064,7 @@ unsigned BitStreamWriter::createAudioFrame (CoreCoderData** const elementData,  
   if ((elementData == nullptr) || (entropyCoder == nullptr) || (tempBuffer == nullptr) || (sbrInfoAndData == nullptr) ||
       (mdctSignals == nullptr) || (mdctQuantMag == nullptr) || (accessUnit == nullptr) || (nSamplesInFrame > 2048) ||
 #if !RESTRICT_TO_AAC
-      (noiseFilling == nullptr) || (tw_mdct == nullptr) ||
+      (noiseFilling == nullptr) || (twAndTcxInfo == nullptr) ||
 # ifndef NO_PREROLL_DATA
       (ipf && !usacIndependencyFlag) ||
 # endif
@@ -1019,7 +1123,12 @@ unsigned BitStreamWriter::createAudioFrame (CoreCoderData** const elementData,  
   for (unsigned el = 0; el < numElements; el++) // el element loop
   {
     const CoreCoderData* const elData = elementData[el];
-
+#if RESTRICT_TO_AAC
+    const uint8_t core_mode_ch = CORE_MODE_FD;
+#else
+    const uint8_t core_mode_ch = (twAndTcxInfo[el] & 1) + CORE_MODE_FD;
+    const bool  tw_mdct_active = (twAndTcxInfo[el] & 2) != 0;
+#endif
     if (elData == nullptr)
     {
       return 0; // internal memory error
@@ -1028,15 +1137,34 @@ unsigned BitStreamWriter::createAudioFrame (CoreCoderData** const elementData,  
     {
       case ID_USAC_SCE: // UsacSingleChannelElement()
       {
-        m_auBitStream.write (CORE_MODE_FD, 1);
+        m_auBitStream.write (core_mode_ch, 1);
+#if !RESTRICT_TO_AAC
+        if (core_mode_ch != CORE_MODE_FD)
+        {
+          if (elData->tnsActive || tw_mdct_active) return 0; // TCX config error
+
+          bitCount += writeLPDChannelStream (*elData, entropyCoder[ci], 0,
+                                             mdctSignals[ci], mdctQuantMag[ci],
+                                             twAndTcxInfo[el] >> 2, true, ipfState,
+                                             nSamplesInFrame, m_auBitStream,
+                                             usacIndependencyFlag) + 1;
+        }
+        else // FD
+        {
+#endif
         m_auBitStream.write (elData->tnsActive ? 1 : 0, 1);  // tns_data_present
         bitCount += 2;
         bitCount += writeFDChannelStream (*elData, entropyCoder[ci], 0,
                                           mdctSignals[ci], mdctQuantMag[ci],
 #if !RESTRICT_TO_AAC
-                                          tw_mdct[el], noiseFilling[el], ipfState,
+                                          tw_mdct_active, noiseFilling[el], ipfState,
 #endif
                                           usacIndependencyFlag);
+#if !RESTRICT_TO_AAC
+        }
+        twAndTcxInfo[el] = (twAndTcxInfo[el] & 3) | (core_mode_ch * 4u) | // update core_mode_last
+                           ((elData->groupingData[0].numWindowGroups & 1) * 64);
+#endif
         if (sbrRatioShiftValue > 0) // UsacSbrData()
         {
           if (usacIndependencyFlag)
@@ -1058,27 +1186,52 @@ unsigned BitStreamWriter::createAudioFrame (CoreCoderData** const elementData,  
       }
       case ID_USAC_CPE: // UsacChannelPairElement()
       {
-        m_auBitStream.write (CORE_MODE_FD, 1); // L
-        m_auBitStream.write (CORE_MODE_FD, 1); // R
+        m_auBitStream.write (core_mode_ch, 1); // L
+        m_auBitStream.write (core_mode_ch, 1); // R
         bitCount += 2;
+#if !RESTRICT_TO_AAC
+        if (core_mode_ch != CORE_MODE_FD)
+        {
+          if (elData->tnsActive || tw_mdct_active) return 0; // TCX config error
+
+          bitCount += writeLPDChannelStream (*elData, entropyCoder[ci], 0, // L
+                                             mdctSignals[ci], mdctQuantMag[ci],
+                                             twAndTcxInfo[el] >> 2, true, nullptr,
+                                             nSamplesInFrame, m_auBitStream,
+                                             usacIndependencyFlag);
+          ci++;
+          bitCount += writeLPDChannelStream (*elData, entropyCoder[ci], 1, // R
+                                             mdctSignals[ci], mdctQuantMag[ci],
+                                             twAndTcxInfo[el] >> 2, true, ipfState,
+                                             nSamplesInFrame, m_auBitStream,
+                                             usacIndependencyFlag);
+        }
+        else // FD
+        {
+#endif
         bitCount += writeStereoCoreToolInfo (*elData, entropyCoder[ci], // L
 #if !RESTRICT_TO_AAC
-                                             tw_mdct[el], &elementData[el]->commonTnsData,
+                                             tw_mdct_active, &elementData[el]->commonTnsData,
 #endif
                                              usacIndependencyFlag);
         bitCount += writeFDChannelStream (*elData, entropyCoder[ci], 0, // L
                                           mdctSignals[ci], mdctQuantMag[ci],
 #if !RESTRICT_TO_AAC
-                                          tw_mdct[el], noiseFilling[el], nullptr,
+                                          tw_mdct_active, noiseFilling[el], nullptr,
 #endif
                                           usacIndependencyFlag);
         ci++;
         bitCount += writeFDChannelStream (*elData, entropyCoder[ci], 1, // R
                                           mdctSignals[ci], mdctQuantMag[ci],
 #if !RESTRICT_TO_AAC
-                                          tw_mdct[el], noiseFilling[el], ipfState,
+                                          tw_mdct_active, noiseFilling[el], ipfState,
 #endif
                                           usacIndependencyFlag);
+#if !RESTRICT_TO_AAC
+        }
+        twAndTcxInfo[el] = (twAndTcxInfo[el] & 3) | (core_mode_ch * 20) | // update core_mode_last
+                           ((elData->groupingData[0].numWindowGroups & 1) * 64) | ((elData->groupingData[1].numWindowGroups & 1) * 128);
+#endif
         if (sbrRatioShiftValue > 0) // UsacSbrData()
         {
           if (usacIndependencyFlag)
@@ -1135,7 +1288,7 @@ unsigned BitStreamWriter::createAudioFrame (CoreCoderData** const elementData,  
     }
     else *rate = 0; // insufficient data
   }
-  memcpy (accessUnit, &m_auBitStream.stream.front (), __min (ci * (ipf ? 1248 : 768), bitCount >> 3));
+  memcpy (accessUnit, &m_auBitStream.stream.front (), __min (ci * (ipf ? 1536 : 768), bitCount >> 3));
 #endif
   return (bitCount >> 3);  // byte count
 }

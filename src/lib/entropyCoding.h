@@ -1,11 +1,11 @@
 /* entropyCoding.h - header file for class with lossless entropy coding capability
- * written by C. R. Helmrich, last modified in 2022 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #ifndef _ENTROPY_CODING_H_
@@ -35,8 +35,8 @@ private:
   uint16_t m_acSize;         // context window size (N/4 in Scl. 7.4)
   uint32_t m_csCurr;         // context state, see initWindowCoding()
   unsigned m_maxTupleLength; // maximum half-transform length (<4096)
-  bool     m_shortTrafoCurr; // used to derive N in Scl. 7.4 and B.25
-  bool     m_shortTrafoPrev; // used to derive previous_N in Scl. 7.4
+  uint8_t  m_shiftTrafoCurr; // used to derive N in Scl. 7.4 and B.25
+  uint8_t  m_shiftTrafoPrev; // used to derive previous_N in Scl. 7.4
 
   // helper functions
   unsigned arithCodeSymbol (const uint16_t symbol, const uint16_t* table, OutputStream* const stream = nullptr);
@@ -70,14 +70,14 @@ public:
 #else
   void     arithSetCtxState (const unsigned newCtxState) { m_csCurr = newCtxState; }
 #endif
-  unsigned indexGetBitCount (const int scaleFactorDelta) const;
+  unsigned indexGetBitCount (const int scaleFactorDelta) const; // for Huffman coding
   unsigned indexGetHuffCode (const int scaleFactorDelta) const;
 
   unsigned initCodingMemory (const unsigned maxTransfLength);
-  unsigned initWindowCoding (const bool forceArithReset, const bool shortWin = false);
+  unsigned initWindowCoding (const bool forceArithReset, const uint8_t winLenShift = 0); // shift: 3 for short, 0 for long
 
-  bool     getIsShortWindow () const                     { return m_shortTrafoCurr; }
-  void     setIsShortWindow (const bool shortWin)        { m_shortTrafoCurr = shortWin; }
+  bool     getIsShortWindow () const                     { return (m_shiftTrafoCurr == 3); } // last frame was eight-short
+  void     setShortWinShift (const uint8_t winLenShift)  { m_shiftTrafoCurr = winLenShift; } // like in initWindowCoding()
 }; // EntropyCoder
 
 #endif // _ENTROPY_CODING_H_

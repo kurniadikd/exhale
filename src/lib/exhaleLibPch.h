@@ -1,11 +1,11 @@
 /* exhaleLibPch.h - pre-compiled header file for classes of exhaleLib coding library
- * written by C. R. Helmrich, last modified in 2020 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #ifndef _EXHALE_LIB_PCH_H_
@@ -152,11 +152,11 @@ struct OutputStream
   uint8_t heldBitCount; // number of bits not yet flushed
   std::vector <uint8_t> stream; // FIFO bit-stream buffer
   // constructor
-  OutputStream () { reset (); }
+  OutputStream () { reset (3072); }
   // destructor
   ~OutputStream() { stream.clear (); }
   // public functions
-  void reset ();   // clear writer states and byte buffer
+  void reset (uint16_t c = 0); // clear, set capacity
   void write (const uint32_t bitChunk, const uint8_t bitCount);
 }; // OutputStream
 

@@ -1,11 +1,11 @@
 /* bitAllocation.cpp - source file for class needed for psychoacoustic bit-allocation
- * written by C. R. Helmrich, last modified in 2021 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #include "exhaleLibPch.h"
@@ -189,12 +189,12 @@ unsigned BitAllocator::initSfbStepSizes (const SfbGroupData* const groupData[USA
                                          const uint32_t specAnaStats[USAC_MAX_NUM_CHANNELS],
                                          const uint32_t tempAnaStats[USAC_MAX_NUM_CHANNELS],
                                          const unsigned nChannels, const unsigned samplingRate, uint32_t* const sfbStepSizes,
-                                         const unsigned lfeChannelIndex /*= USAC_MAX_NUM_CHANNELS*/, const bool tnsDisabled /*= false*/)
+                                         const unsigned lfeChannelIndex, const unsigned ad /*= 0u*/, const bool tnsDisabled /*= false*/)
 {
   // equal-loudness weighting based on data from: K. Kurakata, T. Mizunami, and K. Matsushita, "Percentiles
   // of Normal Hearing-Threshold Distribution Under Free-Field Listening Conditions in Numerical Form," Ac.
   // Sci. Tech, vol. 26, no. 5, pp. 447-449, Jan. 2005, https://www.researchgate.net/publication/239433096.
-  const unsigned HF/*idx*/= ((123456 - samplingRate) >> 11) + (samplingRate < 37566 ? 2 : 0);  // start SFB
+  const unsigned HF/*idx*/= ((123456 - samplingRate) >> 11) + (samplingRate < 37566 ? 2 : ad); // start SFB
   const unsigned LF/*idx*/= 9;
   const unsigned MF/*idx*/= (samplingRate < 27713 ? HF : __min (HF, 30u));
   const unsigned msShift  = (samplingRate + 36736) >> 15; // TODO: 768 smp
@@ -216,7 +216,7 @@ unsigned BitAllocator::initSfbStepSizes (const SfbGroupData* const groupData[USA
     const uint32_t*   rms = grpData.sfbRmsValues;
     uint32_t*   stepSizes = &sfbStepSizes[ch * numSwbShort * NUM_WINDOW_GROUPS];
 // --- apply INTRA-channel simultaneous masking, equal-loudness weighting, and thresholding to SFB RMS data
-    uint32_t maskingSlope = 0, gr, b, elw = 58254; // 8/9
+    uint32_t maskingSlope = 0, gr, b, elw = 58254; // = 64k*8/9
     uint32_t rmsEqualLoud = 0;
     uint32_t sumStepSizes = 0;
 
@@ -415,7 +415,7 @@ unsigned BitAllocator::initSfbStepSizes (const SfbGroupData* const groupData[USA
       {
         gStepSizes[b] = uint32_t (__min (UINT_MAX, (mAvgStepSize * gStepSizes[b] + (chStepSize >> 1)) / chStepSize));
       }
-    } // for gr
+    }
 
     m_avgStepSize[ch] = (uint32_t) mAvgStepSize;
   } // for ch

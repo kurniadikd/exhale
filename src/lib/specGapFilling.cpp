@@ -1,11 +1,11 @@
 /* specGapFilling.cpp - source file for class with spectral gap filling coding methods
- * written by C. R. Helmrich, last modified in 2020 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #include "exhaleLibPch.h"
@@ -116,7 +116,7 @@ uint8_t SpecGapFiller::getSpecGapFillParams (const SfbQuantizer& sfbQuantizer, c
 
               for (int i = swbLength - 1; i >= 0; i--, sfbMagnPtr++, sfbQuantPtr++)
               {
-                if ((*sfbQuantPtr == 0) && (i == 0 || i == swbLength - 1 || *(sfbQuantPtr-1) + *(sfbQuantPtr+1) < 2))
+                if ((*sfbQuantPtr == 0) && (i == 0 || i == swbLength - 1 || *(sfbQuantPtr- 1) + (int)*(sfbQuantPtr+ 1) < 2))
                 {
                   sfbMagnWin += *sfbMagnPtr;
                   uWin++;
@@ -127,7 +127,7 @@ uint8_t SpecGapFiller::getSpecGapFillParams (const SfbQuantizer& sfbQuantizer, c
                 sfbMagnMin = sfbMagnWin;
                 uMin = uWin;
               }
-            } // for w
+            }
 
             sfbMagnSum += sfbMagnMin * grpLength; // scaled minimum
             u += uMin * grpLength;
@@ -136,7 +136,7 @@ uint8_t SpecGapFiller::getSpecGapFillParams (const SfbQuantizer& sfbQuantizer, c
 #endif
           for (int i = sfbWidth - 1; i >= 0; i--)
           {
-            if ((sfbQuant[i] == 0) && (sfbQuant[i - 1] + sfbQuant[i + 1] < 2))
+            if ((sfbQuant[i] == 0) && (sfbQuant[i - 1] + (int) sfbQuant[i + 1] < 2))
             {
               sfbMagnSum += sfbMagn[i];
               u++;
@@ -315,7 +315,7 @@ uint8_t SpecGapFiller::getSpecGapFillParams (const SfbQuantizer& sfbQuantizer, c
 
     // repeat first significant scale factor downwards to save bits
     memset (grpScFacs, grpScFacs[m_1stNonZeroSfb[gr]], m_1stNonZeroSfb[gr] * sizeof (uint8_t));
-  } // for gr
+  }
 
   return CLIP_UCHAR (u | (diff + 16)); // combined level and offset
 }
