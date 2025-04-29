@@ -963,24 +963,24 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
           s = 0;
           for (unsigned b = grpOff[0]; b < grpOff[maxSfbCh]; b++)
           {
-            s += unsigned (0.5 + sqrt ((double) abs (m_mdctSignals[ci][b])));
+            s += unsigned (0.5 + pow ((double) abs (m_mdctSignals[ci][b]), 1.0 / 3.0));
           }
           if (el == 0 && nrChannels == 2)
           {
             for (unsigned b = grpOff[0]; b < grpOff[maxSfbCh]; b++)
             {
-              s += unsigned (0.5 + sqrt ((double) abs (m_mdctSignals[1 - ci][b])));
+              s += unsigned (0.5 + pow ((double) abs (m_mdctSignals[1 - ci][b]), 1.0 / 3.0));
             }
             s = (s + 1u) >> 1;
           }
           if (grpOff[maxSfbCh] > grpOff[0])
           {
-            s = unsigned ((s * (eightShorts ? (24u + (grpData.windowGroupLength[gr] >> 2)) / grpData.windowGroupLength[gr] : 3u) + 4096u) >> 13);
+            s = BA_EPS + unsigned ((s * (eightShorts ? 1u + 55u/grpData.windowGroupLength[gr] : 7u) + 16383u) >> 14);
 # ifndef NO_PREROLL_DATA
             if (((m_frameCount - 1u) % (m_indepPeriod << 1)) == 1 && m_numElements == 1 && !eightShorts) s = (4u + 9u * s) >> 3;
 # endif
           }
-          s = __max (1u + ((UINT32_MAX / (eightShorts ? 3u : 8u)) >> ((2 + m_bitRateMode / 9) * m_bitRateMode)), s * s);
+          s = __max (1u + ((UINT32_MAX / (eightShorts ? 3u : 8u)) >> ((2 + m_bitRateMode / 9) * m_bitRateMode)), s * s * s);
 #endif
           for (unsigned b = 0; b < maxSfbCh; b++)
           {
@@ -988,8 +988,8 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
             const uint8_t sfbWidth = grpOff[b + 1] - grpOff[b];
             const bool stereoCoded = (nrChannels == 2 && coreConfig.stereoMode > 0 && (coreConfig.stereoDataCurr[b] > 0 || !(coreConfig.stereoMode & 1)));
             const uint32_t rmsbMax = (stereoCoded ? __max (grpRms[b], coreConfig.groupingData[1 - ch].sfbRmsValues[m_numSwbShort * gr + b]) : grpRms[b]);
-            const uint64_t sThresh = __max (1u + (UINT32_MAX >> 30), (rmsbMax * uint64_t (__max (16, b * b * grpData.numWindowGroups)) + 32u) >> 6);
-            const uint64_t predFac = (eightShorts || coreConfig.stereoMode < 3 || coreConfig.stereoDataCurr[b & 62] == 0 ? (eightShorts && !b ? 48u : 64u) :
+            const uint64_t sThresh = __max (BA_EPS, (rmsbMax * uint64_t (__max (16, b * b * grpData.numWindowGroups)) + 32u) >> 6);
+            const uint64_t predFac = (eightShorts || coreConfig.stereoMode < 3 || coreConfig.stereoDataCurr[b & 62] == 0 ? (sfbWidth < 8 ? 68u - grpData.numWindowGroups : 64u) :
                                       uint64_t (0.5 + 64 - pow (__min (1.0, fabs (coreConfig.stereoDataCurr[b & 62] * 0.1 - 1.6)), 1.5) * 19.0)); // MS
             grpStepSizes[b] = uint32_t (__min (sThresh, (s * predFac + 32u) >> 6));
             if (stereoCoded && rmsbMax)

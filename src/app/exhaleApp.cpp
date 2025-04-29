@@ -1116,6 +1116,11 @@ int main (const int argc, char* argv[])
 #endif
           goto mainFinish; // encoding error
         }
+#ifdef NO_PREROLL_DATA
+        bw = __min ((6144/8) * numChannels, bw);
+#else
+        bw = __min (1536 * numChannels, bw);
+#endif
         bwTmp = (enableSbrCoding ? bw : (bwTmp + bw) >> 1u);
         if (bwMax < bwTmp) bwMax = bwTmp;
         bwTmp = bw;
@@ -1171,6 +1176,11 @@ int main (const int argc, char* argv[])
 #endif
         goto mainFinish; // coder-time error
       }
+#ifdef NO_PREROLL_DATA
+      bw = __min ((6144/8) * numChannels, bw);
+#else
+      bw = __min (1536 * numChannels, bw);
+#endif
       bwTmp = (enableSbrCoding ? bw : (bwTmp + bw) >> 1u);
       if (bwMax < bwTmp) bwMax = bwTmp;
       bwTmp = bw;
