@@ -31,7 +31,7 @@ ____________________________________________________________________
 Copyright
 ---------
 
-(c) 2024 Christian R. Helmrich, project ecodis. All rights reserved.
+(c) 2025 Christian R. Helmrich, project ecodis. All rights reserved.
 
 
 License

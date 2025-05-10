@@ -294,7 +294,7 @@ static inline uint8_t brModeAndFsToMaxSfbShort(const unsigned bitRateMode, const
   return (samplingRate > 51200 ? 11 : 13) - 2 + (bitRateMode >> 2);
 }
 
-#if SFB_QUANT_PERCEPT_OPT && !EE_MORE_MSE
+#if !EE_MORE_MSE
 static inline void findActualBandwidthShort (uint8_t* const maxSfbShort, const uint16_t* sfbOffsets,
                                              const int32_t* mdctSignals, const int32_t* mdstSignals, const unsigned nSamplesInShort)
 {
@@ -322,7 +322,7 @@ static inline void findActualBandwidthShort (uint8_t* const maxSfbShort, const u
         maxAbs = __max (maxAbs, abs (mdctSignals[e + w * nSamplesInShort]));
       }
     }
-    if (maxAbs > maxSfb * (SA_EPS >> 1)) break;
+    if (maxAbs > maxSfb * (SA_EPS >> (3 - SFB_QUANT_PERCEPT_OPT))) break;
 
     if (e == sfbOffs) sfbOffs = sfbOffsets[(--maxSfb) - 1];
   }
@@ -761,9 +761,9 @@ uint32_t ExhaleEncoder::getThr (const unsigned channelIndex, const unsigned sfbI
   uint32_t sumSfbLoud = 0;
 
   for (int16_t s = 31; s >= 0; s--) sumSfbLoud += sfbLoudMem[s];
-  sumSfbLoud = (sumSfbLoud + 32) >> 6; // -6 dB
+  sumSfbLoud = (sumSfbLoud + 16) >> 5;
 
-  return sumSfbLoud * (sumSfbLoud >> (toSamplingRate (m_frequencyIdx) >> 13)); // scaled SMR
+  return (sumSfbLoud * sumSfbLoud + 3) >> 2;
 }
 
 unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via scale factors
@@ -776,7 +776,7 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
   const uint8_t  maxSfbLong      = (useMaxBandwidth ? m_numSwbLong : brModeAndFsToMaxSfbLong (m_bitRateMode, samplingRate));
   const uint16_t scaleSBR        = (m_shiftValSBR > 0 || m_nonMpegExt ? sbrRateOffset[m_bitRateMode] : 0); // -25% rate
   const uint64_t scaleSr         = (samplingRate < 27713 ? (samplingRate < 23004 ? 32 : 34) - __min (3 << m_shiftValSBR, m_bitRateMode)
-                                   : (m_bitRateMode != 3 && samplingRate < 37566 ? 36 : 37)) - (nChannels >> 1) - 4 + 4 * ((SFB_QUANT_PERCEPT_OPT + 1) / 2);
+                                   : (m_bitRateMode != 3 && samplingRate < 37566 ? 36 : 37) - 4 + 4 * ((SFB_QUANT_PERCEPT_OPT + 1) / 2)) - (nChannels >> 1);
   const uint64_t scaleBr         = (m_bitRateMode == 0 || m_frameCount <= 1 ? __min (32, 17u + (((samplingRate + (1 << 11)) >> 12) << 1) - (nChannels >> 1))
                                    : scaleSr - eightTimesSqrt256Minus[256 - m_bitRateMode] - __min (3, (m_bitRateMode - 1) >> 1)) + scaleSBR;
   uint32_t* sfbStepSizes = (uint32_t*) m_tempIntBuf;
@@ -975,7 +975,7 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
           }
           if (grpOff[maxSfbCh] > grpOff[0])
           {
-            s = BA_EPS + unsigned ((s * (eightShorts ? 1u + 55u/grpData.windowGroupLength[gr] : 7u) + 16383u) >> 14);
+            s = BA_EPS + unsigned ((s * (eightShorts ? 1u + 55u / grpData.windowGroupLength[gr] : 7u) + 16383u) >> 14);
 # ifndef NO_PREROLL_DATA
             if (((m_frameCount - 1u) % (m_indepPeriod << 1)) == 1 && m_numElements == 1 && !eightShorts) s = (4u + 9u * s) >> 3;
 # endif
@@ -1013,6 +1013,52 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
 #endif
             grpScaleFacs[b] = m_bitAllocator.getScaleFac (grpStepSizes[b], &m_mdctSignals[ci][grpOff[b]], sfbWidth, grpRms[b]);
           }
+#if !SFB_QUANT_PERCEPT_OPT
+          if (m_bitRateMode > 0 && m_numElements == 1)
+          {
+            if (maxSfbCh < (samplingRate < 18783 ? 17 : 24) || !m_frameCount)
+            {
+              for (s = 0; s < 26; s++) m_sfbLoudMem[ch][s][m_frameCount & 31] = uint16_t (m_frameCount ? sqrt ((double) getThr (ch, s)) : 32);
+            }
+            else // limit step-sizes around background noise level
+            {
+              const uint8_t* sd = coreConfig.stereoDataCurr;
+              const unsigned ns = __max (samplingRate < 27713 ? (samplingRate < 18783 ? 17 : 24) : 22, m_specGapFiller.getFirstGapFillSfb ());
+              uint32_t minFrRMS = TA_EPS >> EE_MORE_MSE;
+
+              for (s = ns; s < __min (ns + 26u, maxSfbCh); s++)
+              {
+                uint16_t* const lm = m_sfbLoudMem[ch][s - ns];
+                uint32_t minSfbMem = INT_MAX;
+
+                lm[m_frameCount & 31] = __max (BA_EPS, uint16_t (sqrt (double (sd[s] ? __max (grpRms[s], coreConfig.groupingData[1 - ch].sfbRmsValues[s]) : grpRms[s]))));
+
+                for (int f = 0; f < 32; f++)
+                {
+                  const uint32_t slm = (uint32_t) lm[f] * lm[f];
+
+                  if (minSfbMem > slm && slm > BA_EPS) minSfbMem = slm;
+                }
+                if (minSfbMem < INT_MAX)
+                {
+                  const uint32_t w = grpOff[s + 1] - grpOff[s];
+
+                  minSfbMem = (((minSfbMem + 2u) >> 2) + getThr (ch, s - ns) + w - 1u) / w;
+                  if (minFrRMS > minSfbMem) minFrRMS = minSfbMem;
+                }
+              }
+              for (s -= ns; s < 26; s++) m_sfbLoudMem[ch][s][m_frameCount & 31] = BA_EPS;
+
+              for (s = (minFrRMS < (TA_EPS >> EE_MORE_MSE) ? ns : 99); s < maxSfbCh; s++)
+              {
+                const uint32_t w = grpOff[s + 1] - grpOff[s];
+
+                if (stepSizes[s] < minFrRMS * (w >> (sd[s] ? 1 : 0)))
+                  grpScaleFacs[s] = m_bitAllocator.getScaleFac (minFrRMS * (w >> (sd[s] ? 1 : 0)), &m_mdctSignals[ci][grpOff[s]], w, grpRms[s]);
+              }
+            }
+          }
+#endif
         } // for gr
 
 #if !RESTRICT_TO_AAC
@@ -1026,7 +1072,7 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
 
           if ((m_bitRateMode == 0) && (m_numElements == 1) && (samplingRate < 27713) && eightShorts)
           {
-            for (s = 0; s < 26; s++) m_sfbLoudMem[ch][s][m_frameCount & 31] = uint16_t (sqrt (double (getThr (ch, s) << (samplingRate >> 13))));
+            for (s = 0; s < 26; s++) m_sfbLoudMem[ch][s][m_frameCount & 31] = uint16_t (sqrt ((double) getThr (ch, s)));
           }
           if ((maxSfbCh < numSwbFrame) || (m_bitRateMode <= 2)) // increase coding bandwidth
           {
@@ -1046,7 +1092,7 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
                   const unsigned sfbIdx = s - sfbStart;
 
                   m_sfbLoudMem[ch][sfbIdx][m_frameCount & 31] = __max (BA_EPS, uint16_t (sqrt (rmsValue)));
-                  if (grpRms[s] < getThr (ch, sfbIdx)) grpData.scaleFactors[s + m_numSwbShort * gr] = 0;
+                  if (grpRms[s] < (getThr (ch, sfbIdx) >> (samplingRate >> 13))) grpData.scaleFactors[s + m_numSwbShort * gr] = 0;
                 }
               }
               else if ((m_bitRateMode <= 4) && (meanSpecFlat[ci] <= (SCHAR_MAX >> 1))) // lo
@@ -1424,7 +1470,7 @@ unsigned ExhaleEncoder::spectralProcessing ()  // complete ics_info(), calc TNS 
   m_specAnalyzer.getSpectralBandwidth (m_bandwidPrev, nChannels);
 
   // spectral analysis for current MCLT signal (windowed time-samples for the current frame)
-  errorValue |= m_specAnalyzer.spectralAnalysis (m_mdctSignals, m_mdstSignals, nChannels, nSamplesInFrame, samplingRate, lfeChannelIndex);
+  errorValue |= m_specAnalyzer.spectralAnalysis (m_mdctSignals, m_mdstSignals, nChannels, nSamplesInFrame, samplingRate, lfeChannelIndex, SFB_QUANT_PERCEPT_OPT);
 
   // get spectral channel statistics for this frame, used for perceptual model & BW detector
   m_specAnalyzer.getSpecAnalysisStats (m_specAnaCurr, nChannels);
@@ -1518,7 +1564,7 @@ unsigned ExhaleEncoder::spectralProcessing ()  // complete ics_info(), calc TNS 
             }
             icsCurr.maxSfb = __min (icsCurr.maxSfb, brModeAndFsToMaxSfbLong (m_bitRateMode, samplingRate));
           }
-#if SFB_QUANT_PERCEPT_OPT && !EE_MORE_MSE
+#if !EE_MORE_MSE
           while (grpSO[icsCurr.maxSfb] > __max (m_bandwidCurr[ci], m_bandwidPrev[ci]) + (icsCurr.maxSfb >> 1)) icsCurr.maxSfb--; // detect BW
 #endif
         }
@@ -1551,7 +1597,7 @@ unsigned ExhaleEncoder::spectralProcessing ()  // complete ics_info(), calc TNS 
             }
           }
           memcpy (grpData.windowGroupLength, windowGroupingTable[icsCurr.windowGrouping], NUM_WINDOW_GROUPS * sizeof (uint8_t));
-#if SFB_QUANT_PERCEPT_OPT && !EE_MORE_MSE
+#if !EE_MORE_MSE
           findActualBandwidthShort (&icsCurr.maxSfb, grpSO, m_mdctSignals[ci], nChannels < 2 ? nullptr : m_mdstSignals[ci], nSamplesInShort);
 #endif
           errorValue |= eightShortGrouping (grpData, grpSO, m_mdctSignals[ci], nChannels < 2 ? nullptr : m_mdstSignals[ci]);
@@ -2190,7 +2236,7 @@ unsigned ExhaleEncoder::initEncoder (unsigned char* const audioConfigBuffer, uin
       m_elementData[el]->elementType = elementTypeConfig[chConf][el]; // usacElementType[el]
     }
   }
-  memset (m_sfbLoudMem, 1, 2 * 26 * 32 * sizeof (uint16_t));
+  memset (m_sfbLoudMem, SFB_QUANT_PERCEPT_OPT, 2 * 26 * 32 * sizeof (uint16_t));
 
   // allocate all signal buffers
   if (m_shiftValSBR > 0)

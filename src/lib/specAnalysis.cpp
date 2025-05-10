@@ -1,11 +1,11 @@
 /* specAnalysis.cpp - source file for class providing spectral analysis of MCLT signals
- * written by C. R. Helmrich, last modified in 2021 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #include "exhaleLibPch.h"
@@ -228,11 +228,11 @@ unsigned SpecAnalyzer::optimizeGrouping (const unsigned channelIndex, const unsi
 unsigned SpecAnalyzer::spectralAnalysis (const int32_t* const mdctSignals[USAC_MAX_NUM_CHANNELS],
                                          const int32_t* const mdstSignals[USAC_MAX_NUM_CHANNELS],
                                          const unsigned nChannels, const unsigned nSamplesInFrame, const unsigned samplingRate,
-                                         const unsigned lfeChannelIndex /*= USAC_MAX_NUM_CHANNELS*/) // to skip an LFE channel
+                                         const unsigned lfeChannelIndex /*= USAC_MAX_NUM_CHANNELS*/, const unsigned scale /*= 2*/)
 {
   const uint64_t anaBwOffset = SA_BW >> 1;
   const unsigned lpcStopBand16k = (samplingRate <= 32000 ? nSamplesInFrame : (32000 * nSamplesInFrame) / samplingRate) >> SA_BW_SHIFT;
-  const unsigned thresholdSlope = (48000 + SA_EPS * samplingRate) / 96000;
+  const unsigned thresholdSlope = (96000 + SA_EPS * scale * samplingRate) / 192000;
   const unsigned thresholdStart = samplingRate >> 15;
 
   if ((mdctSignals == nullptr) || (mdstSignals == nullptr) || (nChannels > USAC_MAX_NUM_CHANNELS) || (lfeChannelIndex > USAC_MAX_NUM_CHANNELS) ||

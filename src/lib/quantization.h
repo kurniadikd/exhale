@@ -21,7 +21,7 @@
 #define SF_THRESH_NEG  0.92044821 // round -1.5 dB
 #define SF_THRESH_POS  1.09460356 // round +1.5 dB
 #define SFB_QUANT_OFFSET 0.496094 // 13 - 29^(3/4)
-#define SFB_QUANT_PERCEPT_OPT   1 // psych. quant.
+#define SFB_QUANT_PERCEPT_OPT   2 // psych. quant.
 #define QUANT_MAX  85 + (170 >> SFB_QUANT_PERCEPT_OPT)
 
 // class for BL USAC quantization

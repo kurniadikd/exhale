@@ -1,11 +1,11 @@
 /* specAnalysis.h - header file for class providing spectral analysis of MCLT signals
- * written by C. R. Helmrich, last modified in 2021 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #ifndef _SPEC_ANALYSIS_H_
@@ -54,7 +54,7 @@ public:
   unsigned spectralAnalysis (const int32_t* const mdctSignals[USAC_MAX_NUM_CHANNELS],
                              const int32_t* const mdstSignals[USAC_MAX_NUM_CHANNELS],
                              const unsigned nChannels, const unsigned nSamplesInFrame, const unsigned samplingRate,
-                             const unsigned lfeChannelIndex = USAC_MAX_NUM_CHANNELS); // to skip an LFE channel
+                             const unsigned lfeChannelIndex = USAC_MAX_NUM_CHANNELS, const unsigned scale = 2);
   int16_t stereoSigAnalysis (const int32_t* const mdctSignal1, const int32_t* const mdctSignal2,
                              const int32_t* const mdstSignal1, const int32_t* const mdstSignal2,
                              const unsigned nSamplesMax, const unsigned nSamplesInFrame, const bool shortTransforms,
