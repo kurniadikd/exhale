@@ -279,7 +279,7 @@ static inline void applyTnsCoeffPreProcessing (LinearPredictor& predictor, TnsDa
 static inline uint8_t brModeAndFsToMaxSfbLong (const unsigned bitRateMode, const unsigned samplingRate)
 {
 #if !SFB_QUANT_PERCEPT_OPT
-  if (bitRateMode > 5) return (samplingRate > 51200 ? 40 : 39 + ((bitRateMode + 1u) & 14));
+  if (bitRateMode > 5) return (samplingRate > 51200 ? 40 : 39 + EE_MORE_MSE / 2 + ((bitRateMode + 1u) & 14));
 #endif
   // max. for fs of 44 kHz: band 47 (19.3 kHz), 48 kHz: 45 (19.5 kHz), 64 kHz: 39 (22.0 kHz)
   return __max (39, (0x20A000 + (samplingRate >> 1)) / samplingRate) - 9 + bitRateMode - (samplingRate < 46009 ? bitRateMode >> 3 : 0);
@@ -288,7 +288,7 @@ static inline uint8_t brModeAndFsToMaxSfbLong (const unsigned bitRateMode, const
 static inline uint8_t brModeAndFsToMaxSfbShort(const unsigned bitRateMode, const unsigned samplingRate)
 {
 #if !SFB_QUANT_PERCEPT_OPT
-  if (bitRateMode > 5) return (samplingRate > 51200 ? 11 : 11 + bitRateMode / 3);
+  if (bitRateMode > 5) return (samplingRate > 51200 ? 11 : 11 + EE_MORE_MSE / 2 + bitRateMode / 3);
 #endif
   // max. for fs of 44 kHz: band 13 (19.3 kHz), 48 kHz: 13 (21.0 kHz), 64 kHz: 11 (23.0 kHz)
   return (samplingRate > 51200 ? 11 : 13) - 2 + (bitRateMode >> 2);
@@ -965,21 +965,28 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
           {
             s += unsigned (0.5 + pow ((double) abs (m_mdctSignals[ci][b]), 1.0 / 3.0));
           }
-          if (el == 0 && nrChannels == 2)
+          if (el == 0 && nrChannels == 2) // stereo ch sync
           {
+            unsigned s2 = 0;
+
             for (unsigned b = grpOff[0]; b < grpOff[maxSfbCh]; b++)
             {
-              s += unsigned (0.5 + pow ((double) abs (m_mdctSignals[1 - ci][b]), 1.0 / 3.0));
+              s2 += unsigned (0.5 + pow ((double) abs (m_mdctSignals[1 - ci][b]), 1.0 / 3.0));
             }
-            s = (s + 1u) >> 1;
+            s = __max ((s + s2) / (((m_frameCount - 1u) % (m_indepPeriod << 1)) == 1 && m_numElements == 1 ? 2u : 3u),
+                       unsigned (0.5 + (s + s2 + 2.0 * sqrt ((double) s * s2)) * 0.25));
           }
           if (grpOff[maxSfbCh] > grpOff[0])
           {
             s = BA_EPS + unsigned ((s * (eightShorts ? 1u + 55u / grpData.windowGroupLength[gr] : 7u) + 16383u) >> 14);
 # ifndef NO_PREROLL_DATA
-            if (((m_frameCount - 1u) % (m_indepPeriod << 1)) == 1 && m_numElements == 1 && !eightShorts) s = (4u + 9u * s) >> 3;
+            if (((m_frameCount - 1u) % (m_indepPeriod << 1)) == 1 && m_numElements == 1) s = (8u + 17u * s) >> 4;
+            else
 # endif
+            if (!eightShorts) s = (s * __max (237, __min (256, 152 + eightTimesSqrt256Minus[__min (meanSpecFlat[ci], m_meanSpecPrev[ci])])) + 128) >> 8;
           }
+          if (m_shiftValSBR == 0) m_meanSpecPrev[ci] = meanSpecFlat[ci]; // update SFM memory
+
           s = __max (1u + ((UINT32_MAX / (eightShorts ? 3u : 8u)) >> ((2 + m_bitRateMode / 9) * m_bitRateMode)), s * s * s);
 #endif
           for (unsigned b = 0; b < maxSfbCh; b++)
