@@ -1288,7 +1288,7 @@ unsigned BitStreamWriter::createAudioFrame (CoreCoderData** const elementData,  
     }
     else *rate = 0; // insufficient data
   }
-  memcpy (accessUnit, &m_auBitStream.stream.front (), __min (ci * (ipf ? 1536 : 832), bitCount >> 3));
+  memcpy (accessUnit, &m_auBitStream.stream.front (), __min (ci * (ipf ? 1536 : 864), bitCount >> 3));
 #endif
   return (bitCount >> 3);  // byte count
 }
