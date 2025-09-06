@@ -785,8 +785,8 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
   unsigned errorValue = 0; // no error
 
   // psychoacoustic processing of SFB RMS values yielding masking thresholds in m_tempIntBuf
-  errorValue |= m_bitAllocator.initSfbStepSizes (m_scaleFacData, m_numSwbShort, m_specAnaCurr, m_tempAnaCurr,
-                                                 nChannels, samplingRate, sfbStepSizes, lfeChannelIndex, 5 - 5 * ((SFB_QUANT_PERCEPT_OPT + 1) / 2));
+  errorValue |= m_bitAllocator.initSfbStepSizes (m_scaleFacData, m_numSwbShort, m_specAnaCurr, m_tempAnaCurr, nChannels, samplingRate, sfbStepSizes,
+                                                 lfeChannelIndex, (m_bitRateMode > 9 ? m_bitRateMode - 4 : 5) - 5 * ((SFB_QUANT_PERCEPT_OPT + 1) / 2));
 
   // get means of spectral and temporal flatness for every channel
   m_bitAllocator.getChAverageSpecFlat (meanSpecFlat, nChannels);
@@ -1981,7 +1981,7 @@ ExhaleEncoder::ExhaleEncoder (int32_t* const inputPcmData,           unsigned ch
                               )
 {
   // adopt basic coding parameters
-  m_bitRateMode  = __min (9, varBitRateMode);
+  m_bitRateMode  = __min (15 - 3 * SFB_QUANT_PERCEPT_OPT, varBitRateMode);
   m_channelConf  = (numChannels >= 7 ? CCI_UNDEF : (USAC_CCI) numChannels); // see 23003-3, Tables 73 & 161
   if (m_channelConf == CCI_CONF) m_channelConf = CCI_2_CHM; // passing numChannels = 0 means 2-ch dual-mono
   m_numElements  = elementCountConfig[m_channelConf % USAC_MAX_NUM_ELCONFIGS]; // used in UsacDecoderConfig

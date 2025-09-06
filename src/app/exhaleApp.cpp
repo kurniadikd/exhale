@@ -481,7 +481,7 @@ int main (const int argc, char* argv[])
 #endif
 
   // check arg. list, print usage if needed
-  if ((argc < 3) || (argc > 6) || (argc > 1 && argv[1][1] != 0))
+  if ((argc < 3) || (argc > 6) || (argc < 5 && argv[1][1] != 0) || (argc >= 5 && argv[1][1] != 0 && argv[1][2] != 0))
   {
     fprintf_s (stdout, " Copyright 2018-2025 C.R.Helmrich, project ecodis. See License.htm for details.\n\n");
 
@@ -500,8 +500,8 @@ int main (const int argc, char* argv[])
     fprintf_s (stdout, "%s preset [inputWaveFile.wav] outputMP4File.m4a\n\n where\n\n", exeFileName);
 #endif
 #ifdef EXHALE_APP_WIN
-    fprintf_s (stdout, " preset\t=  # (0-9)  low-complexity ISO/MPEG-D Extended HE-AAC at 16ú#+48 kbit/s\n");
-    fprintf_s (stdout, " \t     (a-g)  low-complexity Extended HE-AAC using eSBR at 12ú#+36 kbit/s\n");
+    fprintf_s (stdout, " preset\t=  # (0-9)  low-complexity ISO/MPEG-D Extended HE-AAC at 16ï¿½#+48 kbit/s\n");
+    fprintf_s (stdout, " \t     (a-g)  low-complexity Extended HE-AAC using eSBR at 12ï¿½#+36 kbit/s\n");
 #else
     fprintf_s (stdout, " preset\t=  # (0-9)  low-complexity ISO/MPEG-D Extended HE-AAC at 16*#+48 kbit/s\n");
     fprintf_s (stdout, " \t     (a-g)  low-complexity Extended HE-AAC using eSBR at 12*#+36 kbit/s\n");
@@ -539,6 +539,7 @@ int main (const int argc, char* argv[])
     compatibleExtensionFlag = (i & 0x40) >> 6;
     coreSbrFrameLengthIndex = (i > 0x60 ? 5 : (i & 0x20) >> 5);
     variableCoreBitRateMode = (i & 0x0F) - (i >> 6);
+    if (argv[1][0] == '1' && argv[1][1] >= '0' && argv[1][1] <= '2') variableCoreBitRateMode = 10 + (uint16_t (argv[1][1]) & 0x0F); // 10-12
   }
   else if (*argv[1] == '#') // default mode
   {
@@ -981,6 +982,7 @@ int main (const int argc, char* argv[])
 
       if (*argv[1] != '#') // user-def. mode
       {
+        if (variableCoreBitRateMode > 10) variableCoreBitRateMode += 2;
 #if ENABLE_STDOUT_LOAS
         if (writeStdout)  // print to stderr
         {
