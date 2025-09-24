@@ -41,7 +41,7 @@ exhale is being made available under an open-source license which is
 based on the 3-clause BSD license but modified to address particular
 aspects dictated by the nature and the output of this application.
 
-The license text and release notes for the current version 1.2.1 can
+The license text and release notes for the current version 1.2.2 can
 be found in the `include` subdirectory of the exhale distribution.
 
 
@@ -118,6 +118,9 @@ There is also an **expert mode** providing two additional arguments:
 e.g. encodes Input.wav to Output.m4a at roughly 48 kbit/s stereo and
 with SBR enabled, seamless operation (`s` forces media time 0 in the
 edit list), and an independent frame interval of 42 (range 10...99).
+This expert mode also allows non-SBR presets 10-12 for very high bit
+rates (use these at your own risk!) and option `n` instead of `s` to
+disable the USAC core noise filling functionality (not recommended).
 
 ### Third-party stdin (foobar2000):
 

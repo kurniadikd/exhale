@@ -774,7 +774,7 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
   const unsigned lfeChannelIndex = (m_channelConf >= CCI_6_CH ? __max (5, nChannels - 1) : USAC_MAX_NUM_CHANNELS);
   const bool     useMaxBandwidth = (samplingRate < 37566 || m_shiftValSBR > 0);
   const uint8_t  maxSfbLong      = (useMaxBandwidth ? m_numSwbLong : brModeAndFsToMaxSfbLong (m_bitRateMode, samplingRate));
-  const uint16_t scaleSBR        = (m_shiftValSBR > 0 || m_nonMpegExt ? sbrRateOffset[m_bitRateMode] : 0); // -25% rate
+  const uint16_t scaleSBR        = (m_shiftValSBR > 0 || m_nonMpegExt ? sbrRateOffset[__min (9, m_bitRateMode)] : 0); // -25% rate
   const uint64_t scaleSr         = (samplingRate < 27713 ? (samplingRate < 23004 ? 32 : 34) - __min (3 << m_shiftValSBR, m_bitRateMode)
                                    : (m_bitRateMode != 3 && samplingRate < 37566 ? 36 : 37) - 4 + 4 * ((SFB_QUANT_PERCEPT_OPT + 1) / 2)) - (nChannels >> 1);
   const uint64_t scaleBr         = (m_bitRateMode == 0 || m_frameCount <= 1 ? __min (32, 17u + (((samplingRate + (1 << 11)) >> 12) << 1) - (nChannels >> 1))
@@ -1009,7 +1009,8 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
             const unsigned lfConst = (samplingRate < 27713 && !eightShorts ? 1 : 2); // lfAtten: LF SNR boost, as in my M.Sc. thesis
             const unsigned lfAtten = (b <= 5 ? (eightShorts ? 1 : 4) + b * lfConst : 5 * lfConst - 1 + b + ((b + 5) >> 4));
             const uint8_t sfbWidth = grpOff[b + 1] - grpOff[b];
-            const uint64_t   scale = scaleBr * rateFac * __min (32, lfAtten * grpData.numWindowGroups); // rate control part 1 (SFB)
+            const uint16_t rateMod = (m_bitRateMode > 11 && eightShorts ? __max (65280u - (CLIP_UCHAR (meanSpecFlat[ci] + m_frameCount) << 8u), rateFac) : rateFac); // limit
+            const uint64_t   scale = scaleBr * rateMod * __min (32, lfAtten * grpData.numWindowGroups); // rate control part 1 (SFB)
 
             // scale step-sizes according to VBR mode & derive scale factors from step-sizes
             grpStepSizes[b] = uint32_t (__max (BA_EPS, ((1u << 24) + grpStepSizes[b] * scale) >> 25));

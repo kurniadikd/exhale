@@ -500,8 +500,8 @@ int main (const int argc, char* argv[])
     fprintf_s (stdout, "%s preset [inputWaveFile.wav] outputMP4File.m4a\n\n where\n\n", exeFileName);
 #endif
 #ifdef EXHALE_APP_WIN
-    fprintf_s (stdout, " preset\t=  # (0-9)  low-complexity ISO/MPEG-D Extended HE-AAC at 16�#+48 kbit/s\n");
-    fprintf_s (stdout, " \t     (a-g)  low-complexity Extended HE-AAC using eSBR at 12�#+36 kbit/s\n");
+    fprintf_s (stdout, " preset\t=  # (0-9)  low-complexity ISO/MPEG-D Extended HE-AAC at 16*#+48 kbit/s\n");
+    fprintf_s (stdout, " \t     (a-g)  low-complexity Extended HE-AAC using eSBR at 12*#+36 kbit/s\n");
 #else
     fprintf_s (stdout, " preset\t=  # (0-9)  low-complexity ISO/MPEG-D Extended HE-AAC at 16*#+48 kbit/s\n");
     fprintf_s (stdout, " \t     (a-g)  low-complexity Extended HE-AAC using eSBR at 12*#+36 kbit/s\n");
@@ -982,7 +982,7 @@ int main (const int argc, char* argv[])
 
       if (*argv[1] != '#') // user-def. mode
       {
-        if (variableCoreBitRateMode > 10) variableCoreBitRateMode += 2;
+        if (variableCoreBitRateMode > 10) variableCoreBitRateMode += (variableCoreBitRateMode >> 2);
 #if ENABLE_STDOUT_LOAS
         if (writeStdout)  // print to stderr
         {
