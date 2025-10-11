@@ -1014,6 +1014,11 @@ unsigned BitStreamWriter::createAudioConfig (const char samplingFrequencyIndex, 
 
     m_auBitStream.write (0, 2); // numConfigExtensions
     m_auBitStream.write (2, 4); // ..EXT_LOUDNESS_INFO
+    if (sbrRatioShiftValue == 0 && methodValueBits == 8) // avoid a conf warning
+    {
+      m_auBitStream.write (9, 4); // usacConfigExtLength
+    }
+    else
     m_auBitStream.write (methodValueBits < 3 ? 7 : 8, 4); // usacConfigExtLength
 
     m_auBitStream.write (1, 12);// loudnessInfoCount=1
@@ -1025,9 +1030,19 @@ unsigned BitStreamWriter::createAudioConfig (const char samplingFrequencyIndex, 
     m_auBitStream.write ((loudnessInfo >> 2) & 0xF, 4);     // measurementSystem
     m_auBitStream.write ((loudnessInfo & 0x3), 2);  // reliability, 3 = accurate
 
+    if (sbrRatioShiftValue == 0 && methodValueBits == 8) // avoid a conf warning
+    {
+      m_auBitStream.write (1, 1);  // loudnessInfoSetExtPresent = 1, for padding
+      m_auBitStream.write (0, 4);  // loudnessInfoSetExtension, 4-bit terminator
+      bitCount += 82;
+      m_auBitStream.write (0, 6); // remaining padding
+    }
+    else
+    {
     m_auBitStream.write (0, 1);  // loudnessInfoSetExtPresent=0, payload padding
     bitCount += (methodValueBits < 3 ? 66 : 74);
     if (methodValueBits >= 3) m_auBitStream.write (0, 10 - methodValueBits);
+    }
   }
 
   bitCount += (8 - m_auBitStream.heldBitCount) & 7;
