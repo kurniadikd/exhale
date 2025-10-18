@@ -118,8 +118,11 @@ There is also an **expert mode** providing two additional arguments:
 e.g. encodes Input.wav to Output.m4a at roughly 48 kbit/s stereo and
 with SBR enabled, seamless operation (`s` forces media time 0 in the
 edit list), and an independent frame interval of 42 (range 10...99).
+For optimal seeking performance during playback, this frame interval
+shouldn't exceed 2.5 seconds, e.g. value 78 at 32 kHz sampling rate.
+
 This expert mode also allows non-SBR presets 10-12 for very high bit
-rates (use these at your own risk!) and option `n` instead of `s` to
+rates (e.g. exhale.exe 11 s 99 ...) and option `n` instead of `s` to
 disable the USAC core noise filling functionality (not recommended).
 
 ### Third-party stdin (foobar2000):

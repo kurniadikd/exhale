@@ -1982,7 +1982,7 @@ ExhaleEncoder::ExhaleEncoder (int32_t* const inputPcmData,           unsigned ch
                               )
 {
   // adopt basic coding parameters
-  m_bitRateMode  = __min (15 - 3 * SFB_QUANT_PERCEPT_OPT, varBitRateMode);
+  m_bitRateMode  = __min (10 + 2 * SFB_QUANT_PERCEPT_OPT, varBitRateMode);
   m_channelConf  = (numChannels >= 7 ? CCI_UNDEF : (USAC_CCI) numChannels); // see 23003-3, Tables 73 & 161
   if (m_channelConf == CCI_CONF) m_channelConf = CCI_2_CHM; // passing numChannels = 0 means 2-ch dual-mono
   m_numElements  = elementCountConfig[m_channelConf % USAC_MAX_NUM_ELCONFIGS]; // used in UsacDecoderConfig
