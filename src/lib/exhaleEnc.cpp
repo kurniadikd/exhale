@@ -946,6 +946,7 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
         const uint8_t numSwbCh = (eightShorts ? m_numSwbShort : m_numSwbLong);
 #endif
 #if !EE_MORE_MSE
+        const uint8_t tonalFac = ((m_specAnaCurr[coreConfig.commonWindow && nrChannels > 1 ? ci - ch : ci] >> 16) & UCHAR_MAX) > (340 >> SFB_QUANT_PERCEPT_OPT) ? 1 : 0;
         const uint16_t rateFac = m_bitAllocator.getRateCtrlFac (m_rateFactor, samplingRate, meanSpecFlat[ci], coreConfig.icsInfoPrev[ch].windowSequence == EIGHT_SHORT);
 #endif
         uint32_t*    stepSizes = &sfbStepSizes[ci * m_numSwbShort * NUM_WINDOW_GROUPS];
@@ -1007,7 +1008,7 @@ unsigned ExhaleEncoder::psychBitAllocation () // perceptual bit-allocation via s
             }
 #else
             const unsigned lfConst = (samplingRate < 27713 && !eightShorts ? 1 : 2); // lfAtten: LF SNR boost, as in my M.Sc. thesis
-            const unsigned lfAtten = (b <= 5 ? (eightShorts ? 1 : 4) + b * lfConst : 5 * lfConst - 1 + b + ((b + 5) >> 4));
+            const unsigned lfAtten = (b <= 5 ? (eightShorts ? 4 - 3 * tonalFac + b * (tonalFac + 1) : b * (lfConst - 1) + 9) : 5 * lfConst - 1 + b + ((b + 5) >> 4)); // BMLD
             const uint8_t sfbWidth = grpOff[b + 1] - grpOff[b];
             const uint16_t rateMod = (m_bitRateMode > 11 && eightShorts ? __max (65280u - (CLIP_UCHAR (meanSpecFlat[ci] + m_frameCount) << 8u), rateFac) : rateFac); // limit
             const uint64_t   scale = scaleBr * rateMod * __min (32, lfAtten * grpData.numWindowGroups); // rate control part 1 (SFB)
