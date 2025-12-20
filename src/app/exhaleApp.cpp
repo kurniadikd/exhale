@@ -540,6 +540,12 @@ int main (const int argc, char* argv[])
     coreSbrFrameLengthIndex = (i > 0x60 ? 5 : (i & 0x20) >> 5);
     variableCoreBitRateMode = (i & 0x0F) - (i >> 6);
     if (argv[1][0] == '1' && argv[1][1] >= '0' && argv[1][1] <= '2') variableCoreBitRateMode = 10 + (uint16_t (argv[1][1]) & 0x0F); // 10-12
+    else if (argv[1][1]) // invalid expert cmd line
+    {
+      _ERROR2 (" ERROR reading preset mode: character(s) %s not supported! Use 0-12 or a-g.\n\n", argv[1]);
+
+      return 16384; // preset not supported
+    }
   }
   else if (*argv[1] == '#') // default mode
   {
@@ -554,7 +560,7 @@ int main (const int argc, char* argv[])
   }
   else
   {
-    _ERROR2 (" ERROR reading preset mode: character %s is not supported! Use 0-9 or a-g.\n\n", argv[1]);
+    _ERROR2 (" ERROR reading preset mode: character(s) %s not supported! Use 0-9 or a-g.\n\n", argv[1]);
 
     return 16384; // preset isn't supported
   }
