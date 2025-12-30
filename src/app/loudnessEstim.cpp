@@ -1,11 +1,11 @@
 /* loudnessEstim.cpp - source file for class with ITU-R BS.1770-4 loudness level estimation
- * written by C. R. Helmrich, last modified in 2020 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #include "exhaleAppPch.h"
@@ -87,7 +87,6 @@ uint32_t LoudnessEstimator::addNewPcmData (const unsigned samplesPerChannel)
         i[3] = i[2];   i[2] = i[1];   i[1] = i[0];   i[0] = xi; // update
         o[3] = o[2];   o[2] = o[1];   o[1] = o[0];   o[0] = yi; // memory
 #else
-        // simplified K-filter, including 500-Hz high-pass pre-processing
         const int32_t xi = *(chSig++);
         const int32_t yi = xi - m_filterMemoryI[ch] + ((128 + m_filterFactor * m_filterMemoryO[ch]) >> 8);
         const uint32_t a = abs (xi);
@@ -108,7 +107,8 @@ uint32_t LoudnessEstimator::addNewPcmData (const unsigned samplesPerChannel)
 
       for (ch = 0; ch < m_inputChannels; ch++)  // sum 64-sample averages
       {
-        zij = (m_powerValue[0][ch] + m_powerValue[1][ch] + m_powerValue[2][ch] + newQuarterPower[ch] + (1u << 5)) >> 6;
+        zij = ((m_powerValue[0][ch] + m_powerValue[1][ch] + (1u << 5)) >> 6) + // avoid over-
+              ((m_powerValue[2][ch] + newQuarterPower[ch] + (1u << 5)) >> 6); // flow @ 0dBFS
         zj += (ch > 2 ? (16u + 45 * zij) >> 5 : zij); // weighting by G_i
       }
 
