@@ -1,11 +1,11 @@
 /* loudnessEstim.h - header file for class with ITU-R BS.1770-4 loudness level estimation
- * written by C. R. Helmrich, last modified in 2020 - see License.htm for legal notices
+ * written by C. R. Helmrich, last modified in 2025 - see License.htm for legal notices
  *
  * The copyright in this software is being made available under the exhale Copyright License
  * and comes with ABSOLUTELY NO WARRANTY. This software may be subject to other third-
  * party rights, including patent rights. No such rights are granted under this License.
  *
- * Copyright (c) 2018-2021 Christian R. Helmrich, project ecodis. All rights reserved.
+ * Copyright (c) 2018-2025 Christian R. Helmrich, project ecodis. All rights reserved.
  */
 
 #ifndef _LOUDNESS_ESTIM_H_
@@ -15,6 +15,7 @@
 
 // constants, experimental macros
 #define LE_ACCURATE_CALC       1 // correct filter order, no 500-Hz pre-high-pass
+// 0: simplified K-filter+high-pass
 #define LE_THRESH_REL       0.1f // second stage, relative threshold 10dB below L
 #if LE_ACCURATE_CALC
 #define LE_THRESH_ABS (5.0f / 8388608.0f) // absolute gate threshold for -70 LUFS
