@@ -1,0 +1,110 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Berjalan ketika ada tag baru yang di-push (misal v1.2.2)
+  workflow_dispatch: # Memungkinkan build manual lewat UI GitHub
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux Binary
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Rename binary for distribution
+        run: |
+          mv build/src/app/exhale build/src/app/exhale-linux-x64
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: exhale-linux
+          path: build/src/app/exhale-linux-x64
+
+  build-windows:
+    name: Build Windows Binary
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Rename binary for distribution
+        run: |
+          mv build/src/app/Release/exhale.exe build/src/app/Release/exhale-windows-x64.exe
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: exhale-windows
+          path: build/src/app/Release/exhale-windows-x64.exe
+
+  release:
+    name: Create GitHub Release
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: exhale-linux
+          path: ./dist
+
+      - name: Download Windows binary
+        uses: actions/download-artifact@v4
+        with:
+          name: exhale-windows
+          path: ./dist
+
+      - name: Set Release Tag
+        id: tag_name
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "TAG=${{ github.ref_name }}" >> $GITHUB_ENV
+          else
+            echo "TAG=manual-build-${{ github.run_number }}" >> $GITHUB_ENV
+          fi
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: Release ${{ env.TAG }}
+          body: |
+            Automated Release of Exhale.
+            Built from commit: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          files: |
+            ./dist/exhale-linux-x64
+            ./dist/exhale-windows-x64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

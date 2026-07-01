@@ -1,0 +1,43 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Setiap hari jam 00:00 UTC
+  workflow_dispatch: # Memungkinkan trigger manual dari UI GitHub
+
+jobs:
+  sync:
+    name: Sync Master and Tags from GitLab
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add GitLab upstream and sync
+        run: |
+          # Tambahkan GitLab remote jika belum ada
+          git remote add upstream https://gitlab.com/ecodis/exhale.git || true
+          
+          # Fetch master branch dan tags dari upstream
+          git fetch upstream master --tags
+          
+          # Checkout master lokal
+          git checkout master
+          
+          # Merge upstream master ke master lokal jika ada perubahan baru
+          git merge upstream/master -m "sync: merge upstream master" || echo "No changes to merge or clean merge"
+          
+          # Push ke origin (GitHub) master dan semua tags
+          git push origin master
+          git push origin --tags
